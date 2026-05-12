@@ -10,6 +10,13 @@ use Illuminate\Validation\ValidationException;
 
 class WorkspaceMemberService
 {
+    protected ActivityLogService $activityLogService;
+
+    public function __construct(ActivityLogService $activityLogService)
+    {
+        $this->activityLogService = $activityLogService;
+    }
+
     public function getMembers(Workspace $workspace): Collection
     {
         return WorkspaceMember::where('workspace_id', $workspace->id)
@@ -43,10 +50,18 @@ class WorkspaceMemberService
             'role' => $data['role'],
         ]);
 
+        $this->activityLogService->create(
+            $workspace->id,
+            null,
+            $authUser->id,
+            'member_added',
+            $userToAdd->name . ' was added as ' . $data['role'] . '.'
+        );
+
         return $member->load('user:id,name,email');
     }
 
-    public function updateRole(WorkspaceMember $member, string $role): WorkspaceMember
+    public function updateRole(WorkspaceMember $member, string $role, int $authUserId): WorkspaceMember
     {
         if ($member->role === 'owner') {
             throw ValidationException::withMessages([
@@ -54,20 +69,45 @@ class WorkspaceMemberService
             ]);
         }
 
+        $oldRole = $member->role;
+
         $member->update([
             'role' => $role,
         ]);
 
-        return $member->load('user:id,name,email');
+        $member->load('user:id,name,email');
+
+        $this->activityLogService->create(
+            $member->workspace_id,
+            null,
+            $authUserId,
+            'member_role_updated',
+            $member->user->name . ' role was changed from ' . $oldRole . ' to ' . $role . '.'
+        );
+
+        return $member;
     }
 
-    public function removeMember(WorkspaceMember $member): void
+    public function removeMember(WorkspaceMember $member, int $authUserId): void
     {
         if ($member->role === 'owner') {
             throw ValidationException::withMessages([
                 'member' => ['Workspace owner cannot be removed.']
             ]);
         }
+
+        $member->load('user:id,name,email');
+
+        $removedUserName = $member->user?->name ?? 'A member';
+        $workspaceId = $member->workspace_id;
+
+        $this->activityLogService->create(
+            $workspaceId,
+            null,
+            $authUserId,
+            'member_removed',
+            $removedUserName . ' was removed from the workspace.'
+        );
 
         $member->delete();
     }

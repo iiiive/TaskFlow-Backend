@@ -5,6 +5,9 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\WorkspaceMemberController;
 use App\Http\Controllers\TicketController;
+use App\Http\Controllers\TicketCommentController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ActivityLogController;
 
 Route::post('/store', [AuthController::class, 'store']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -30,4 +33,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tickets/{ticketId}', [TicketController::class, 'show']);
     Route::put('/tickets/{ticketId}', [TicketController::class, 'update']);
     Route::delete('/tickets/{ticketId}', [TicketController::class, 'destroy']);
+
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/tickets/{ticketId}/comments', [TicketCommentController::class, 'index']);
+    Route::post('/tickets/{ticketId}/comments', [TicketCommentController::class, 'store']);
+    Route::get('/workspaces/{workspaceId}/activity', [ActivityLogController::class, 'workspaceLogs']);
+    Route::get('/tickets/{ticketId}/activity', [ActivityLogController::class, 'ticketLogs']);
+
+    Route::get('/tickets/{ticketId}/insights', [TicketController::class, 'insights']);
 });

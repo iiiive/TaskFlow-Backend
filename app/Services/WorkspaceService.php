@@ -9,6 +9,13 @@ use Illuminate\Database\Eloquent\Collection;
 
 class WorkspaceService
 {
+    protected ActivityLogService $activityLogService;
+
+    public function __construct(ActivityLogService $activityLogService)
+    {
+        $this->activityLogService = $activityLogService;
+    }
+
     public function getUserWorkspaces(User $user): Collection
     {
         return Workspace::whereHas('workspaceMembers', function ($query) use ($user) {
@@ -36,13 +43,21 @@ class WorkspaceService
             'role' => 'owner',
         ]);
 
+        $this->activityLogService->create(
+            $workspace->id,
+            null,
+            $user->id,
+            'workspace_created',
+            'Workspace was created.'
+        );
+
         return $workspace->load([
             'owner:id,name,email',
             'workspaceMembers.user:id,name,email',
         ]);
     }
 
-    public function updateWorkspace(Workspace $workspace, array $data): Workspace
+    public function updateWorkspace(Workspace $workspace, array $data, int $userId): Workspace
     {
         $workspace->update([
             'name' => $data['name'] ?? $workspace->name,
@@ -51,14 +66,30 @@ class WorkspaceService
                 : $workspace->description,
         ]);
 
+        $this->activityLogService->create(
+            $workspace->id,
+            null,
+            $userId,
+            'workspace_updated',
+            'Workspace details were updated.'
+        );
+
         return $workspace->load([
             'owner:id,name,email',
             'workspaceMembers.user:id,name,email',
         ]);
     }
 
-    public function deleteWorkspace(Workspace $workspace): void
+    public function deleteWorkspace(Workspace $workspace, int $userId): void
     {
+        $this->activityLogService->create(
+            $workspace->id,
+            null,
+            $userId,
+            'workspace_deleted',
+            'Workspace was deleted.'
+        );
+
         $workspace->delete();
     }
 }

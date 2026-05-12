@@ -116,8 +116,9 @@ class WorkspaceController extends Controller
         ]);
 
         $workspace = $this->workspaceService->updateWorkspace(
-            $workspace,
-            $request->only(['name', 'description'])
+        $workspace,
+        $request->only(['name', 'description']),
+        $user->id
         );
 
         return response()->json([

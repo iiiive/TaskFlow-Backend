@@ -8,18 +8,25 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('ticket_comments', function (Blueprint $table) {
+        Schema::create('activity_logs', function (Blueprint $table) {
             $table->id();
 
+            $table->foreignId('workspace_id')
+                ->constrained('workspaces')
+                ->onDelete('cascade');
+
             $table->foreignId('ticket_id')
+                ->nullable()
                 ->constrained('tickets')
                 ->onDelete('cascade');
 
             $table->foreignId('user_id')
+                ->nullable()
                 ->constrained('users')
-                ->onDelete('cascade');
+                ->onDelete('set null');
 
-            $table->text('comment');
+            $table->string('action');
+            $table->text('description')->nullable();
 
             $table->timestamps();
         });
@@ -27,6 +34,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('ticket_comments');
+        Schema::dropIfExists('activity_logs');
     }
 };

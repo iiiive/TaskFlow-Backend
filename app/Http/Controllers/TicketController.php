@@ -27,7 +27,7 @@ class TicketController extends Controller
      * Display all tickets inside a workspace.
      * Owner, editor, and viewer can view.
      */
-    public function index($workspaceId)
+    public function index(Request $request, $workspaceId)
     {
         $user = Auth::user();
 
@@ -45,7 +45,26 @@ class TicketController extends Controller
             ], 403);
         }
 
-        $tickets = $this->ticketService->getWorkspaceTickets($workspace);
+        $request->validate([
+        'status' => 'nullable|in:todo,in_progress,in_review,done',
+        'priority' => 'nullable|in:low,medium,high,urgent',
+        'assigned_to' => 'nullable|integer|exists:users,id',
+        'search' => 'nullable|string|max:255',
+        'due_before' => 'nullable|date',
+        'due_after' => 'nullable|date',
+        ]); 
+
+        $tickets = $this->ticketService->getWorkspaceTickets(
+            $workspace,
+            $request->only([
+                'status',
+                'priority',
+                'assigned_to',
+                'search',
+                'due_before',
+                'due_after',
+            ])
+        );
 
         return response()->json([
             'message' => 'Tickets retrieved successfully.',
@@ -209,6 +228,32 @@ class TicketController extends Controller
 
         return response()->json([
             'message' => 'Ticket deleted successfully.',
+        ], 200);
+    }
+
+    public function insights($ticketId)
+    {
+        $user = Auth::user();
+
+        $ticket = Ticket::find($ticketId);
+
+        if (!$ticket) {
+            return response()->json([
+                'message' => 'Ticket not found.',
+            ], 404);
+        }
+
+        if (!$this->permissionService->canView($ticket->workspace_id, $user->id)) {
+            return response()->json([
+                'message' => 'You do not have access to this ticket.',
+            ], 403);
+        }
+
+        $insightService = app(\App\Services\TicketInsightService::class);
+
+        return response()->json([
+            'message' => 'Ticket insights retrieved successfully.',
+            'data' => $insightService->getTicketInsights($ticket),
         ], 200);
     }
 }

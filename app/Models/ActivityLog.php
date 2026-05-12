@@ -5,15 +5,22 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class TicketComment extends Model
+class ActivityLog extends Model
 {
     use HasFactory;
 
     protected $fillable = [
+        'workspace_id',
         'ticket_id',
         'user_id',
-        'comment',
+        'action',
+        'description',
     ];
+
+    public function workspace()
+    {
+        return $this->belongsTo(Workspace::class);
+    }
 
     public function ticket()
     {

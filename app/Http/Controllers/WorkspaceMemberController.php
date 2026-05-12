@@ -128,7 +128,11 @@ class WorkspaceMemberController extends Controller
             ], 404);
         }
 
-        $member = $this->memberService->updateRole($member, $request->role);
+        $member = $this->memberService->updateRole(
+        $member,
+        $request->role,
+        $authUser->id
+        );
 
         return response()->json([
             'message' => 'Workspace member role updated successfully.',
@@ -168,7 +172,7 @@ class WorkspaceMemberController extends Controller
             ], 404);
         }
 
-        $this->memberService->removeMember($member);
+        $this->memberService->removeMember($member, $authUser->id);
 
         return response()->json([
             'message' => 'Workspace member removed successfully.',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\TicketInsightService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -9,6 +10,8 @@ class TicketResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $insightService = app(TicketInsightService::class);
+
         return [
             'id' => $this->id,
             'workspace_id' => $this->workspace_id,
@@ -20,6 +23,9 @@ class TicketResource extends JsonResource
             'status' => $this->status,
             'priority' => $this->priority,
             'due_date' => $this->due_date,
+
+            'due_date_warning' => $insightService->getDueDateWarning($this->resource),
+            'suggested_priority' => $insightService->suggestPriority($this->resource),
 
             'creator' => new UserResource($this->whenLoaded('creator')),
             'assignee' => new UserResource($this->whenLoaded('assignee')),
