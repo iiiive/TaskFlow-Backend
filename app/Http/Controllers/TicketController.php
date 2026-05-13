@@ -15,6 +15,15 @@ class TicketController extends Controller
     protected TicketService $ticketService;
     protected WorkspacePermissionService $permissionService;
 
+    private array $allowedStatuses = [
+        'todo',
+        'ready_for_development',
+        'dev_in_progress',
+        'ready_for_testing',
+        'ready_for_uat',
+        'done',
+    ];
+
     public function __construct(
         TicketService $ticketService,
         WorkspacePermissionService $permissionService
@@ -23,10 +32,6 @@ class TicketController extends Controller
         $this->permissionService = $permissionService;
     }
 
-    /**
-     * Display all tickets inside a workspace.
-     * Owner, editor, and viewer can view.
-     */
     public function index(Request $request, $workspaceId)
     {
         $user = Auth::user();
@@ -46,13 +51,13 @@ class TicketController extends Controller
         }
 
         $request->validate([
-        'status' => 'nullable|in:todo,in_progress,in_review,done',
-        'priority' => 'nullable|in:low,medium,high,urgent',
-        'assigned_to' => 'nullable|integer|exists:users,id',
-        'search' => 'nullable|string|max:255',
-        'due_before' => 'nullable|date',
-        'due_after' => 'nullable|date',
-        ]); 
+            'status' => 'nullable|in:' . implode(',', $this->allowedStatuses),
+            'priority' => 'nullable|in:low,medium,high,urgent',
+            'assigned_to' => 'nullable|integer|exists:users,id',
+            'search' => 'nullable|string|max:255',
+            'due_before' => 'nullable|date',
+            'due_after' => 'nullable|date',
+        ]);
 
         $tickets = $this->ticketService->getWorkspaceTickets(
             $workspace,
@@ -72,10 +77,6 @@ class TicketController extends Controller
         ], 200);
     }
 
-    /**
-     * Create a new ticket.
-     * Only owner and editor can create.
-     */
     public function store(Request $request, $workspaceId)
     {
         $user = Auth::user();
@@ -94,26 +95,22 @@ class TicketController extends Controller
             ], 403);
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'status' => 'nullable|in:todo,in_progress,in_review,done',
+            'status' => 'nullable|in:' . implode(',', $this->allowedStatuses),
             'priority' => 'nullable|in:low,medium,high,urgent',
             'assigned_to' => 'nullable|exists:users,id',
             'due_date' => 'nullable|date',
         ]);
 
+        $validated['status'] = $validated['status'] ?? 'todo';
+        $validated['priority'] = $validated['priority'] ?? 'medium';
+
         $ticket = $this->ticketService->createTicket(
             $workspace,
             $user->id,
-            $request->only([
-                'title',
-                'description',
-                'status',
-                'priority',
-                'assigned_to',
-                'due_date',
-            ])
+            $validated
         );
 
         return response()->json([
@@ -122,10 +119,6 @@ class TicketController extends Controller
         ], 201);
     }
 
-    /**
-     * Display one ticket.
-     * Any workspace member can view.
-     */
     public function show($ticketId)
     {
         $user = Auth::user();
@@ -153,10 +146,6 @@ class TicketController extends Controller
         ], 200);
     }
 
-    /**
-     * Update a ticket.
-     * Owner and editor can update.
-     */
     public function update(Request $request, $ticketId)
     {
         $user = Auth::user();
@@ -175,10 +164,10 @@ class TicketController extends Controller
             ], 403);
         }
 
-        $request->validate([
+        $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
-            'status' => 'nullable|in:todo,in_progress,in_review,done',
+            'status' => 'nullable|in:' . implode(',', $this->allowedStatuses),
             'priority' => 'nullable|in:low,medium,high,urgent',
             'assigned_to' => 'nullable|exists:users,id',
             'due_date' => 'nullable|date',
@@ -186,14 +175,7 @@ class TicketController extends Controller
 
         $ticket = $this->ticketService->updateTicket(
             $ticket,
-            $request->only([
-                'title',
-                'description',
-                'status',
-                'priority',
-                'assigned_to',
-                'due_date',
-            ])
+            $validated
         );
 
         return response()->json([
@@ -202,10 +184,6 @@ class TicketController extends Controller
         ], 200);
     }
 
-    /**
-     * Delete a ticket.
-     * Only owner can delete.
-     */
     public function destroy($ticketId)
     {
         $user = Auth::user();
