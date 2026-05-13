@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\TicketCommentResource;
 use App\Models\Ticket;
+use App\Models\WorkspaceMember;
 use App\Services\TicketCommentService;
 use App\Services\WorkspacePermissionService;
 use Illuminate\Http\Request;
@@ -25,7 +26,6 @@ class TicketCommentController extends Controller
     public function index($ticketId)
     {
         $user = Auth::user();
-
         $ticket = Ticket::find($ticketId);
 
         if (!$ticket) {
@@ -51,7 +51,6 @@ class TicketCommentController extends Controller
     public function store(Request $request, $ticketId)
     {
         $user = Auth::user();
-
         $ticket = Ticket::find($ticketId);
 
         if (!$ticket) {
@@ -66,14 +65,24 @@ class TicketCommentController extends Controller
             ], 403);
         }
 
-        $request->validate([
-            'comment' => 'required|string',
+        $member = WorkspaceMember::where('workspace_id', $ticket->workspace_id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$member || !in_array($member->role, ['owner', 'editor'])) {
+            return response()->json([
+                'message' => 'You do not have permission to comment on this ticket.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'comment' => 'required|string|max:5000',
         ]);
 
         $comment = $this->commentService->createComment(
             $ticket,
             $user->id,
-            $request->comment
+            $validated['comment']
         );
 
         return response()->json([
