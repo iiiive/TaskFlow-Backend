@@ -34,4 +34,19 @@ class Ticket extends Model
     {
         return $this->belongsTo(User::class, 'assigned_to');
     }
+
+    public function comments()
+    {
+        return $this->hasMany(TicketComment::class);
+    }
+
+    public function activityLogs()
+    {
+        return $this->hasMany(ActivityLog::class);
+    }
+
+    public function attachments()
+    {
+        return $this->hasMany(TicketAttachment::class);
+    }
 }

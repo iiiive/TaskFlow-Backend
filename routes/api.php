@@ -8,6 +8,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TicketCommentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\TicketAttachmentController;
 
 Route::post('/store', [AuthController::class, 'store']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -41,4 +42,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tickets/{ticketId}/activity', [ActivityLogController::class, 'ticketLogs']);
 
     Route::get('/tickets/{ticketId}/insights', [TicketController::class, 'insights']);
+
+    Route::get('/tickets/{ticket}/attachments', [TicketAttachmentController::class, 'index']);
+    Route::post('/tickets/{ticket}/attachments', [TicketAttachmentController::class, 'store']);
+    Route::delete('/attachments/{attachment}', [TicketAttachmentController::class, 'destroy']);
 });
