@@ -14,11 +14,19 @@ Route::post('/store', [AuthController::class, 'store']);
 Route::post('/register', [AuthController::class, 'store']);
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+
 Route::get('/auth/google/redirect', [AuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'getProfile']);
+    Route::put('/profile', [AuthController::class, 'updateProfile']);
+    Route::put('/profile/password', [AuthController::class, 'updatePassword']);
+    Route::post('/profile/avatar', [AuthController::class, 'updateAvatar']);
+    Route::delete('/profile/avatar', [AuthController::class, 'removeAvatar']);
+
     Route::post('/logout', [AuthController::class, 'logout']);
 
     Route::get('/workspaces', [WorkspaceController::class, 'index']);
@@ -40,6 +48,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/tickets/{ticketId}', [TicketController::class, 'destroy']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/dashboard/notifications', [DashboardController::class, 'notifications']);
 
     Route::get('/tickets/{ticketId}/comments', [TicketCommentController::class, 'index']);
     Route::post('/tickets/{ticketId}/comments', [TicketCommentController::class, 'store']);
