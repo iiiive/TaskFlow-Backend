@@ -11,7 +11,11 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\TicketAttachmentController;
 
 Route::post('/store', [AuthController::class, 'store']);
+Route::post('/register', [AuthController::class, 'store']);
 Route::post('/login', [AuthController::class, 'login']);
+
+Route::get('/auth/google/redirect', [AuthController::class, 'redirectToGoogle']);
+Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'getProfile']);
@@ -36,8 +40,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/tickets/{ticketId}', [TicketController::class, 'destroy']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
+
     Route::get('/tickets/{ticketId}/comments', [TicketCommentController::class, 'index']);
     Route::post('/tickets/{ticketId}/comments', [TicketCommentController::class, 'store']);
+
     Route::get('/workspaces/{workspaceId}/activity', [ActivityLogController::class, 'workspaceLogs']);
     Route::get('/tickets/{ticketId}/activity', [ActivityLogController::class, 'ticketLogs']);
 
