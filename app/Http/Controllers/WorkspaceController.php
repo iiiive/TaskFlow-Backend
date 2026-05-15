@@ -132,27 +132,27 @@ class WorkspaceController extends Controller
      * Only the owner can delete.
      */
     public function destroy($id)
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
 
-        $workspace = Workspace::find($id);
+    $workspace = Workspace::find($id);
 
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
-        }
-
-        if (!$this->permissionService->canManageWorkspace($workspace->owner_id, $user->id)) {
-            return response()->json([
-                'message' => 'Only the workspace owner can delete this workspace.',
-            ], 403);
-        }
-
-        $this->workspaceService->deleteWorkspace($workspace);
-
+    if (!$workspace) {
         return response()->json([
-            'message' => 'Workspace deleted successfully.',
-        ], 200);
+            'message' => 'Workspace not found.',
+        ], 404);
     }
+
+    if (!$this->permissionService->canManageWorkspace($workspace->owner_id, $user->id)) {
+        return response()->json([
+            'message' => 'Only the workspace owner can delete this workspace.',
+        ], 403);
+    }
+
+    $this->workspaceService->deleteWorkspace($workspace, $user->id);
+
+    return response()->json([
+        'message' => 'Workspace deleted successfully.',
+    ], 200);
+}
 }

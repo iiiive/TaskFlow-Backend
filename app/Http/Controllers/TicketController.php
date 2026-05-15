@@ -22,6 +22,7 @@ class TicketController extends Controller
         'ready_for_testing',
         'ready_for_uat',
         'done',
+        'completed',
     ];
 
     public function __construct(
