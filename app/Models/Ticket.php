@@ -11,6 +11,8 @@ class Ticket extends Model
 
     protected $fillable = [
         'workspace_id',
+        'kanban_column_id',
+        'epic_id',
         'created_by',
         'assigned_to',
         'title',
@@ -23,6 +25,16 @@ class Ticket extends Model
     public function workspace()
     {
         return $this->belongsTo(Workspace::class);
+    }
+
+    public function kanbanColumn()
+    {
+        return $this->belongsTo(KanbanColumn::class, 'kanban_column_id');
+    }
+
+    public function epic()
+    {
+        return $this->belongsTo(Epic::class);
     }
 
     public function creator()
@@ -48,5 +60,10 @@ class Ticket extends Model
     public function attachments()
     {
         return $this->hasMany(TicketAttachment::class);
+    }
+
+    public function timeLogs()
+    {
+        return $this->hasMany(TicketTimeLog::class);
     }
 }

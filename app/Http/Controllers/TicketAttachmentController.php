@@ -7,11 +7,19 @@ use App\Models\ActivityLog;
 use App\Models\Ticket;
 use App\Models\TicketAttachment;
 use App\Models\WorkspaceMember;
+use App\Services\WorkspaceEmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class TicketAttachmentController extends Controller
 {
+    protected WorkspaceEmailNotificationService $emailNotificationService;
+
+    public function __construct(WorkspaceEmailNotificationService $emailNotificationService)
+    {
+        $this->emailNotificationService = $emailNotificationService;
+    }
+
     public function index(Ticket $ticket)
     {
         $user = auth()->user();
@@ -83,13 +91,15 @@ class TicketAttachmentController extends Controller
             'file_type' => $file->getClientMimeType(),
         ]);
 
-        ActivityLog::create([
+        $activityLog = ActivityLog::create([
             'workspace_id' => $ticket->workspace_id,
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'action' => 'attachment_uploaded',
-            'description' => $user->name . ' uploaded an attachment: ' . $file->getClientOriginalName() . '.',
+            'description' => $user->name . ' uploaded attachment "' . $file->getClientOriginalName() . '" to ticket "' . $ticket->title . '".',
         ]);
+
+        $this->emailNotificationService->sendActivityNotification($activityLog);
 
         $attachment->load('user');
 
@@ -121,17 +131,21 @@ class TicketAttachmentController extends Controller
             ], 403);
         }
 
+        $fileName = $attachment->file_name;
+
         if ($attachment->file_path && Storage::disk('public')->exists($attachment->file_path)) {
             Storage::disk('public')->delete($attachment->file_path);
         }
 
-        ActivityLog::create([
+        $activityLog = ActivityLog::create([
             'workspace_id' => $ticket->workspace_id,
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'action' => 'attachment_deleted',
-            'description' => $user->name . ' deleted an attachment: ' . $attachment->file_name . '.',
+            'description' => $user->name . ' deleted attachment "' . $fileName . '" from ticket "' . $ticket->title . '".',
         ]);
+
+        $this->emailNotificationService->sendActivityNotification($activityLog);
 
         $attachment->delete();
 

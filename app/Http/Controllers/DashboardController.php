@@ -39,6 +39,7 @@ class DashboardController extends Controller
                 'workspace',
                 'assignee',
                 'creator',
+                'kanbanColumn',
                 'comments.user',
                 'activityLogs.user',
             ])
@@ -50,11 +51,8 @@ class DashboardController extends Controller
 
         foreach ($assignedTickets as $ticket) {
             $workspaceName = $ticket->workspace?->name ?? 'Unknown Workspace';
+            $kanbanColumnName = $ticket->kanbanColumn?->name;
 
-            /*
-             * Assigned ticket notification from activity logs.
-             * This catches cases where a ticket was assigned after creation.
-             */
             foreach ($ticket->activityLogs as $log) {
                 if ((int) $log->user_id === (int) $user->id) {
                     continue;
@@ -80,6 +78,8 @@ class DashboardController extends Controller
                         'ticket_title' => $ticket->title,
                         'workspace_id' => $ticket->workspace_id,
                         'workspace_name' => $workspaceName,
+                        'kanban_column_id' => $ticket->kanban_column_id,
+                        'kanban_column_name' => $kanbanColumnName,
                         'status' => $ticket->status,
                         'priority' => $ticket->priority,
                         'created_at' => optional($log->created_at)->format('Y-m-d H:i:s'),
@@ -88,9 +88,11 @@ class DashboardController extends Controller
             }
 
             /*
-             * Fallback assigned ticket notification.
-             * This is useful for old tickets that do not have assignment logs yet.
-             */
+            |--------------------------------------------------------------------------
+            | Fallback assigned ticket notification
+            |--------------------------------------------------------------------------
+            | This is for old tickets that do not have assignment logs yet.
+            */
             if ((int) $ticket->created_by !== (int) $user->id) {
                 $notifications[] = [
                     'id' => 'ticket-' . $ticket->id,
@@ -101,16 +103,14 @@ class DashboardController extends Controller
                     'ticket_title' => $ticket->title,
                     'workspace_id' => $ticket->workspace_id,
                     'workspace_name' => $workspaceName,
+                    'kanban_column_id' => $ticket->kanban_column_id,
+                    'kanban_column_name' => $kanbanColumnName,
                     'status' => $ticket->status,
                     'priority' => $ticket->priority,
                     'created_at' => optional($ticket->created_at)->format('Y-m-d H:i:s'),
                 ];
             }
 
-            /*
-             * Comment notifications.
-             * Only show comments made by other users on tickets assigned to this user.
-             */
             foreach ($ticket->comments as $comment) {
                 if ((int) $comment->user_id === (int) $user->id) {
                     continue;
@@ -127,16 +127,14 @@ class DashboardController extends Controller
                     'ticket_title' => $ticket->title,
                     'workspace_id' => $ticket->workspace_id,
                     'workspace_name' => $workspaceName,
+                    'kanban_column_id' => $ticket->kanban_column_id,
+                    'kanban_column_name' => $kanbanColumnName,
                     'status' => $ticket->status,
                     'priority' => $ticket->priority,
                     'created_at' => optional($comment->created_at)->format('Y-m-d H:i:s'),
                 ];
             }
 
-            /*
-             * Activity notifications.
-             * Skip assignment logs here because they are already shown as assigned_ticket notifications.
-             */
             foreach ($ticket->activityLogs as $log) {
                 if ((int) $log->user_id === (int) $user->id) {
                     continue;
@@ -165,6 +163,8 @@ class DashboardController extends Controller
                     'ticket_title' => $ticket->title,
                     'workspace_id' => $ticket->workspace_id,
                     'workspace_name' => $workspaceName,
+                    'kanban_column_id' => $ticket->kanban_column_id,
+                    'kanban_column_name' => $kanbanColumnName,
                     'status' => $ticket->status,
                     'priority' => $ticket->priority,
                     'created_at' => optional($log->created_at)->format('Y-m-d H:i:s'),

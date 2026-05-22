@@ -22,9 +22,6 @@ class WorkspaceController extends Controller
         $this->permissionService = $permissionService;
     }
 
-    /**
-     * Display all workspaces where the logged-in user is a member.
-     */
     public function index()
     {
         $user = Auth::user();
@@ -37,9 +34,6 @@ class WorkspaceController extends Controller
         ], 200);
     }
 
-    /**
-     * Create a new workspace.
-     */
     public function store(Request $request)
     {
         $request->validate([
@@ -52,15 +46,28 @@ class WorkspaceController extends Controller
             $request->only(['name', 'description'])
         );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Create default Kanban columns
+        |--------------------------------------------------------------------------
+        | Every new workspace starts with:
+        | Backlog → Ready for Development → Dev In Progress → Ready for Testing
+        | → Ready for UAT → Done
+        */
+        $workspace->createDefaultKanbanColumns();
+
+        $workspace->load([
+            'owner:id,name,email',
+            'workspaceMembers.user:id,name,email',
+            'kanbanColumns',
+        ]);
+
         return response()->json([
             'message' => 'Workspace created successfully.',
             'data' => new WorkspaceResource($workspace),
         ], 201);
     }
 
-    /**
-     * Display a specific workspace.
-     */
     public function show($id)
     {
         $user = Auth::user();
@@ -68,6 +75,7 @@ class WorkspaceController extends Controller
         $workspace = Workspace::with([
             'owner:id,name,email',
             'workspaceMembers.user:id,name,email',
+            'kanbanColumns',
         ])->find($id);
 
         if (!$workspace) {
@@ -88,10 +96,6 @@ class WorkspaceController extends Controller
         ], 200);
     }
 
-    /**
-     * Update a workspace.
-     * Only the owner can update.
-     */
     public function update(Request $request, $id)
     {
         $user = Auth::user();
@@ -116,10 +120,16 @@ class WorkspaceController extends Controller
         ]);
 
         $workspace = $this->workspaceService->updateWorkspace(
-        $workspace,
-        $request->only(['name', 'description']),
-        $user->id
+            $workspace,
+            $request->only(['name', 'description']),
+            $user->id
         );
+
+        $workspace->load([
+            'owner:id,name,email',
+            'workspaceMembers.user:id,name,email',
+            'kanbanColumns',
+        ]);
 
         return response()->json([
             'message' => 'Workspace updated successfully.',
@@ -127,32 +137,28 @@ class WorkspaceController extends Controller
         ], 200);
     }
 
-    /**
-     * Delete a workspace.
-     * Only the owner can delete.
-     */
     public function destroy($id)
-{
-    $user = Auth::user();
+    {
+        $user = Auth::user();
 
-    $workspace = Workspace::find($id);
+        $workspace = Workspace::find($id);
 
-    if (!$workspace) {
+        if (!$workspace) {
+            return response()->json([
+                'message' => 'Workspace not found.',
+            ], 404);
+        }
+
+        if (!$this->permissionService->canManageWorkspace($workspace->owner_id, $user->id)) {
+            return response()->json([
+                'message' => 'Only the workspace owner can delete this workspace.',
+            ], 403);
+        }
+
+        $this->workspaceService->deleteWorkspace($workspace, $user->id);
+
         return response()->json([
-            'message' => 'Workspace not found.',
-        ], 404);
+            'message' => 'Workspace deleted successfully.',
+        ], 200);
     }
-
-    if (!$this->permissionService->canManageWorkspace($workspace->owner_id, $user->id)) {
-        return response()->json([
-            'message' => 'Only the workspace owner can delete this workspace.',
-        ], 403);
-    }
-
-    $this->workspaceService->deleteWorkspace($workspace, $user->id);
-
-    return response()->json([
-        'message' => 'Workspace deleted successfully.',
-    ], 200);
-}
 }

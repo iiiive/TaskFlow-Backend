@@ -24,6 +24,7 @@ class WorkspaceService
             ->with([
                 'owner:id,name,email',
                 'workspaceMembers.user:id,name,email',
+                'kanbanColumns',
             ])
             ->latest()
             ->get();
@@ -43,6 +44,16 @@ class WorkspaceService
             'role' => 'owner',
         ]);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Create default Kanban workflow
+        |--------------------------------------------------------------------------
+        | New workspaces now automatically get:
+        | Backlog → Ready for Development → Dev In Progress → Ready for Testing
+        | → Ready for UAT → Done
+        */
+        $workspace->createDefaultKanbanColumns();
+
         $this->activityLogService->create(
             $workspace->id,
             null,
@@ -54,6 +65,7 @@ class WorkspaceService
         return $workspace->load([
             'owner:id,name,email',
             'workspaceMembers.user:id,name,email',
+            'kanbanColumns',
         ]);
     }
 
@@ -77,6 +89,7 @@ class WorkspaceService
         return $workspace->load([
             'owner:id,name,email',
             'workspaceMembers.user:id,name,email',
+            'kanbanColumns',
         ]);
     }
 

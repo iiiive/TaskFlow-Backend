@@ -31,10 +31,8 @@ class WorkspaceResource extends JsonResource
             'name' => $this->name,
             'description' => $this->description,
 
-            // This is what Angular needs.
             'role' => $currentUserRole,
 
-            // Optional but useful for frontend permission checks.
             'can_edit' => in_array($currentUserRole, ['owner', 'editor'], true),
             'can_manage_members' => $currentUserRole === 'owner',
 
@@ -42,6 +40,10 @@ class WorkspaceResource extends JsonResource
 
             'members' => WorkspaceMemberResource::collection(
                 $this->whenLoaded('workspaceMembers')
+            ),
+
+            'kanban_columns' => KanbanColumnResource::collection(
+                $this->whenLoaded('kanbanColumns')
             ),
 
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),

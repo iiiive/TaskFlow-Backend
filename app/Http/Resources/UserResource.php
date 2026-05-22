@@ -28,6 +28,9 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'google_id' => $this->google_id,
             'has_password' => !empty($this->password),
+            'two_factor_enabled' => (bool) $this->two_factor_enabled,
+            'two_factor_confirmed_at' => $this->two_factor_confirmed_at?->format('Y-m-d H:i:s'),
+
             'avatar' => $this->avatar,
             'avatar_url' => $avatarUrl,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),

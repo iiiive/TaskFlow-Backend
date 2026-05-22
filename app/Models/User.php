@@ -20,11 +20,19 @@ class User extends Authenticatable
         'google_id',
         'avatar',
         'email_verified_at',
+
+        // 2FA fields
+        'two_factor_enabled',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'two_factor_confirmed_at',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
     ];
 
     protected function casts(): array
@@ -32,6 +40,11 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+
+            // 2FA casts
+            'two_factor_enabled' => 'boolean',
+            'two_factor_recovery_codes' => 'array',
+            'two_factor_confirmed_at' => 'datetime',
         ];
     }
 
@@ -50,5 +63,10 @@ class User extends Authenticatable
         return $this->belongsToMany(Workspace::class, 'workspace_members')
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    public function ticketTimeLogs()
+    {
+        return $this->hasMany(TicketTimeLog::class);
     }
 }
