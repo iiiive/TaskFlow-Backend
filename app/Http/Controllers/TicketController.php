@@ -214,14 +214,6 @@ class TicketController extends Controller
             $validated['kanban_column_id'] = $column?->id;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Important Custom Column Fix
-        |--------------------------------------------------------------------------
-        | If the selected Kanban column has a status_key, use it.
-        | If it is a custom column without status_key, do NOT force it to todo.
-        | We keep status as a compatibility field only.
-        */
         if ($column && $column->status_key) {
             $validated['status'] = $column->status_key;
         } else {
@@ -246,13 +238,11 @@ class TicketController extends Controller
             'epic',
         ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Accurate Workspace Email Activity
-        |--------------------------------------------------------------------------
-        | This tells members exactly what was created and where it was placed.
-        */
-        $columnName = $ticket->kanbanColumn?->name ?? $this->formatStatusLabel($ticket->status);
+        $columnName = $this->resolveColumnName(
+            $ticket->workspace_id,
+            $ticket->kanban_column_id,
+            $ticket->status
+        );
 
         $this->createAndSendActivity(
             $ticket->workspace_id,
@@ -320,22 +310,22 @@ class TicketController extends Controller
             ], 403);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Save old values before update
-        |--------------------------------------------------------------------------
-        | These are used to generate accurate email/activity descriptions.
-        */
         $oldTitle = $ticket->title;
         $oldDescription = $ticket->description;
         $oldPriority = $ticket->priority;
         $oldDueDate = $ticket->due_date;
         $oldEpicId = $ticket->epic_id;
         $oldAssignedTo = $ticket->assigned_to;
+        $oldAssigneeName = $ticket->assignee?->name ?? $ticket->assignee?->email ?? 'Unassigned';
+
         $oldKanbanColumnId = $ticket->kanban_column_id;
         $oldStatus = $ticket->status;
-        $oldColumnName = $ticket->kanbanColumn?->name ?? $this->formatStatusLabel($ticket->status);
-        $oldAssigneeName = $ticket->assignee?->name ?? $ticket->assignee?->email ?? 'Unassigned';
+
+        $oldColumnName = $this->resolveColumnName(
+            $ticket->workspace_id,
+            $ticket->kanban_column_id,
+            $ticket->status
+        );
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
@@ -360,16 +350,6 @@ class TicketController extends Controller
             }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Accurate Kanban Column Movement Fix
-        |--------------------------------------------------------------------------
-        | When kanban_column_id is sent, trust the actual column, not the old
-        | fixed workflow status sent by the frontend.
-        |
-        | If the custom column has no status_key, we keep the old status.
-        | This prevents custom columns from being labeled as "To Do" in emails.
-        */
         if (array_key_exists('kanban_column_id', $validated) && !empty($validated['kanban_column_id'])) {
             $column = KanbanColumn::where('id', $validated['kanban_column_id'])
                 ->where('workspace_id', $ticket->workspace_id)
@@ -384,21 +364,10 @@ class TicketController extends Controller
             if ($column->status_key) {
                 $validated['status'] = $column->status_key;
             } else {
-                /*
-                | If frontend sends status=todo for custom columns, remove it.
-                | This stops wrong emails like "Moved from Dev In Progress to To Do".
-                */
                 unset($validated['status']);
             }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Direct Status Update Compatibility
-        |--------------------------------------------------------------------------
-        | If the frontend sends only status, find the matching default column.
-        | This keeps old buttons/features working.
-        */
         if (
             array_key_exists('status', $validated)
             && !array_key_exists('kanban_column_id', $validated)
@@ -429,13 +398,6 @@ class TicketController extends Controller
             'epic',
         ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Accurate Activity Logs + Emails
-        |--------------------------------------------------------------------------
-        | These are intentionally specific. The email notification reads from
-        | activity_logs.description, so accuracy starts here.
-        */
         $this->logAccurateTicketUpdateActivities(
             ticket: $ticket,
             user: $user,
@@ -536,12 +498,17 @@ class TicketController extends Controller
         ?string $oldColumnName,
         array $requestData
     ): void {
-        $newColumnName = $ticket->kanbanColumn?->name ?? $this->formatStatusLabel($ticket->status);
+        $newColumnName = $this->resolveColumnName(
+            $ticket->workspace_id,
+            $ticket->kanban_column_id,
+            $ticket->status
+        );
+
         $newAssigneeName = $ticket->assignee?->name ?? $ticket->assignee?->email ?? 'Unassigned';
 
         if (
             array_key_exists('kanban_column_id', $requestData)
-            && (int) $oldKanbanColumnId !== (int) $ticket->kanban_column_id
+            && (int) ($oldKanbanColumnId ?? 0) !== (int) ($ticket->kanban_column_id ?? 0)
         ) {
             $this->createAndSendActivity(
                 $ticket->workspace_id,
@@ -554,12 +521,24 @@ class TicketController extends Controller
             array_key_exists('status', $requestData)
             && $oldStatus !== $ticket->status
         ) {
+            $oldStatusName = $this->resolveColumnName(
+                $ticket->workspace_id,
+                $oldKanbanColumnId,
+                $oldStatus
+            );
+
+            $newStatusName = $this->resolveColumnName(
+                $ticket->workspace_id,
+                $ticket->kanban_column_id,
+                $ticket->status
+            );
+
             $this->createAndSendActivity(
                 $ticket->workspace_id,
                 $ticket->id,
                 $user->id,
-                'ticket_status_updated',
-                $user->name . ' moved ticket "' . $ticket->title . '" from "' . $this->formatStatusLabel($oldStatus) . '" to "' . $this->formatStatusLabel($ticket->status) . '".'
+                'ticket_moved',
+                $user->name . ' moved ticket "' . $ticket->title . '" from "' . $oldStatusName . '" to "' . $newStatusName . '".'
             );
         }
 
@@ -671,6 +650,34 @@ class TicketController extends Controller
         ]);
 
         $this->emailNotificationService->sendActivityNotification($activityLog);
+    }
+
+    private function resolveColumnName(
+        int $workspaceId,
+        mixed $kanbanColumnId = null,
+        ?string $status = null
+    ): string {
+        if ($kanbanColumnId) {
+            $columnName = KanbanColumn::where('workspace_id', $workspaceId)
+                ->where('id', $kanbanColumnId)
+                ->value('name');
+
+            if ($columnName) {
+                return $columnName;
+            }
+        }
+
+        if ($status) {
+            $columnName = KanbanColumn::where('workspace_id', $workspaceId)
+                ->where('status_key', $status)
+                ->value('name');
+
+            if ($columnName) {
+                return $columnName;
+            }
+        }
+
+        return $this->formatStatusLabel($status);
     }
 
     private function formatStatusLabel(?string $value): string
