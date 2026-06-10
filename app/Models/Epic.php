@@ -10,7 +10,7 @@ class Epic extends Model
     use HasFactory;
 
     protected $fillable = [
-        'workspace_id',
+        'project_id',
         'created_by',
         'name',
         'description',
@@ -19,7 +19,7 @@ class Epic extends Model
 
     public function workspace()
     {
-        return $this->belongsTo(Workspace::class);
+        return $this->belongsTo(Workspace::class, 'project_id');
     }
 
     public function creator()

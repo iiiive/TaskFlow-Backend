@@ -17,8 +17,8 @@ class WorkspaceEmailNotificationService
             'workspace.owner:id,name,email',
             'workspace.workspaceMembers.user:id,name,email',
             'user:id,name,email',
-            'ticket:id,workspace_id,kanban_column_id,title,status,priority,due_date',
-            'ticket.kanbanColumn:id,workspace_id,name,slug,status_key,is_backlog_column,is_done_column',
+            'ticket:id,project_id,kanban_column_id,title,status,priority,due_date',
+            'ticket.kanbanColumn:id,project_id,name,slug,status_key,is_backlog_column,is_done_column',
         ]);
 
         if (!$activityLog->workspace) {
@@ -41,7 +41,7 @@ class WorkspaceEmailNotificationService
                     new WorkspaceActivityNotificationMail($activityLog, $recipient)
                 );
             } catch (\Throwable $error) {
-                Log::error('Failed to send workspace activity email to member.', [
+                Log::error('Failed to send project activity email.', [
                     'activity_log_id' => $activityLog->id,
                     'recipient_id' => $recipient->id,
                     'recipient_email' => $recipient->email,

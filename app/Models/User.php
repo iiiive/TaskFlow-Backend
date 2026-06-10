@@ -14,11 +14,14 @@ class User extends Authenticatable
     use HasFactory, Notifiable, HasApiTokens;
 
     protected $fillable = [
+        'organization_id',
+        'is_super_admin',
         'name',
         'email',
         'password',
         'google_id',
         'avatar',
+        'timezone',
         'email_verified_at',
 
         // 2FA fields
@@ -40,12 +43,18 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_super_admin' => 'boolean',
 
             // 2FA casts
             'two_factor_enabled' => 'boolean',
             'two_factor_recovery_codes' => 'array',
             'two_factor_confirmed_at' => 'datetime',
         ];
+    }
+
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
     }
 
     public function ownedWorkspaces()
@@ -60,7 +69,7 @@ class User extends Authenticatable
 
     public function workspaces()
     {
-        return $this->belongsToMany(Workspace::class, 'workspace_members')
+        return $this->belongsToMany(Workspace::class, 'project_members', 'user_id', 'project_id')
             ->withPivot('role')
             ->withTimestamps();
     }

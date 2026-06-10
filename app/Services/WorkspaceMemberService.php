@@ -19,7 +19,7 @@ class WorkspaceMemberService
 
     public function getMembers(Workspace $workspace): Collection
     {
-        return WorkspaceMember::where('workspace_id', $workspace->id)
+        return WorkspaceMember::where('project_id', $workspace->id)
             ->with('user:id,name,email')
             ->get();
     }
@@ -30,22 +30,22 @@ class WorkspaceMemberService
 
         if ($userToAdd->id === $authUser->id) {
             throw ValidationException::withMessages([
-                'email' => ['You are already the owner of this workspace.']
+                'email' => ['You are already a member of this project.']
             ]);
         }
 
-        $existingMember = WorkspaceMember::where('workspace_id', $workspace->id)
+        $existingMember = WorkspaceMember::where('project_id', $workspace->id)
             ->where('user_id', $userToAdd->id)
             ->first();
 
         if ($existingMember) {
             throw ValidationException::withMessages([
-                'email' => ['User is already a member of this workspace.']
+                'email' => ['User is already a member of this project.']
             ]);
         }
 
         $member = WorkspaceMember::create([
-            'workspace_id' => $workspace->id,
+            'project_id' => $workspace->id,
             'user_id' => $userToAdd->id,
             'role' => $data['role'],
         ]);
@@ -65,20 +65,17 @@ class WorkspaceMemberService
     {
         if ($member->role === 'owner') {
             throw ValidationException::withMessages([
-                'role' => ['Owner role cannot be changed here.']
+                'role' => ['Owner role cannot be changed.']
             ]);
         }
 
         $oldRole = $member->role;
 
-        $member->update([
-            'role' => $role,
-        ]);
-
+        $member->update(['role' => $role]);
         $member->load('user:id,name,email');
 
         $this->activityLogService->create(
-            $member->workspace_id,
+            $member->project_id,
             null,
             $authUserId,
             'member_role_updated',
@@ -92,21 +89,20 @@ class WorkspaceMemberService
     {
         if ($member->role === 'owner') {
             throw ValidationException::withMessages([
-                'member' => ['Workspace owner cannot be removed.']
+                'member' => ['Project owner cannot be removed.']
             ]);
         }
 
         $member->load('user:id,name,email');
-
         $removedUserName = $member->user?->name ?? 'A member';
-        $workspaceId = $member->workspace_id;
+        $projectId = $member->project_id;
 
         $this->activityLogService->create(
-            $workspaceId,
+            $projectId,
             null,
             $authUserId,
             'member_removed',
-            $removedUserName . ' was removed from the workspace.'
+            $removedUserName . ' was removed from the project.'
         );
 
         $member->delete();

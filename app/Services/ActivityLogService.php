@@ -15,41 +15,26 @@ class ActivityLogService
     }
 
     public function create(
-        int $workspaceId,
+        int $projectId,
         ?int $ticketId,
         ?int $userId,
         string $action,
         ?string $description = null
     ): ActivityLog {
         $activityLog = ActivityLog::create([
-            'workspace_id' => $workspaceId,
+            'project_id' => $projectId,
             'ticket_id' => $ticketId,
             'user_id' => $userId,
             'action' => $action,
             'description' => $description,
         ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Email Notification Hook
-        |--------------------------------------------------------------------------
-        | Every time an activity log is created, we also notify workspace members.
-        | This keeps the logic centralized. We do not need to add email code inside
-        | TicketController, WorkspaceController, comments, epics, etc.
-        */
         try {
             $this->workspaceEmailNotificationService->sendActivityNotification($activityLog);
         } catch (\Throwable $error) {
-            /*
-            |--------------------------------------------------------------------------
-            | Important
-            |--------------------------------------------------------------------------
-            | We DO NOT want email failure to break the actual system action.
-            | Example: if Brevo SMTP fails, ticket creation/update should still work.
-            */
-            Log::error('Workspace activity email notification failed.', [
+            Log::error('Project activity email notification failed.', [
                 'activity_log_id' => $activityLog->id,
-                'workspace_id' => $workspaceId,
+                'project_id' => $projectId,
                 'ticket_id' => $ticketId,
                 'user_id' => $userId,
                 'action' => $action,
@@ -60,9 +45,9 @@ class ActivityLogService
         return $activityLog;
     }
 
-    public function getWorkspaceLogs(int $workspaceId)
+    public function getWorkspaceLogs(int $projectId)
     {
-        return ActivityLog::where('workspace_id', $workspaceId)
+        return ActivityLog::where('project_id', $projectId)
             ->with([
                 'user:id,name,email',
                 'ticket:id,title,status,priority',

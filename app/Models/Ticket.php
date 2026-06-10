@@ -9,22 +9,41 @@ class Ticket extends Model
 {
     use HasFactory;
 
+    const ISSUE_TYPES = [
+        'epic', 'story', 'task', 'subtask', 'bug',
+        'improvement', 'change_request', 'incident',
+        'service_request', 'other',
+    ];
+
     protected $fillable = [
-        'workspace_id',
+        'project_id',
         'kanban_column_id',
         'epic_id',
+        'sprint_id',
+        'workflow_state_id',
+        'issue_type',
+        'parent_ticket_id',
+        'issue_number',
         'created_by',
+        'reporter_id',
         'assigned_to',
         'title',
         'description',
         'status',
         'priority',
+        'story_points',
+        'category',
         'due_date',
+    ];
+
+    protected $casts = [
+        'story_points' => 'integer',
+        'due_date' => 'date',
     ];
 
     public function workspace()
     {
-        return $this->belongsTo(Workspace::class);
+        return $this->belongsTo(Workspace::class, 'project_id');
     }
 
     public function kanbanColumn()
@@ -37,14 +56,44 @@ class Ticket extends Model
         return $this->belongsTo(Epic::class);
     }
 
+    public function sprint()
+    {
+        return $this->belongsTo(Sprint::class);
+    }
+
+    public function workflowState()
+    {
+        return $this->belongsTo(WorkflowState::class, 'workflow_state_id');
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(Ticket::class, 'parent_ticket_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Ticket::class, 'parent_ticket_id');
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function reporter()
+    {
+        return $this->belongsTo(User::class, 'reporter_id');
+    }
+
     public function assignee()
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function labels()
+    {
+        return $this->belongsToMany(Label::class, 'issue_labels');
     }
 
     public function comments()

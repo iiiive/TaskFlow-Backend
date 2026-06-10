@@ -4,17 +4,36 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class Workspace extends Model
 {
     use HasFactory;
 
+    protected $table = 'projects';
+
     protected $fillable = [
         'owner_id',
+        'organization_id',
         'name',
         'description',
+        'project_key',
+        'project_type',
+        'project_mode',
+        'last_issue_number',
+        'archived_at',
     ];
+
+    protected $casts = [
+        'archived_at' => 'datetime',
+        'last_issue_number' => 'integer',
+    ];
+
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
+    }
 
     public function owner()
     {
@@ -23,51 +42,77 @@ class Workspace extends Model
 
     public function members()
     {
-        return $this->belongsToMany(User::class, 'workspace_members')
+        return $this->belongsToMany(User::class, 'project_members', 'project_id', 'user_id')
             ->withPivot('role')
             ->withTimestamps();
     }
 
     public function workspaceMembers()
     {
-        return $this->hasMany(WorkspaceMember::class);
+        return $this->hasMany(WorkspaceMember::class, 'project_id');
     }
 
     public function tickets()
     {
-        return $this->hasMany(Ticket::class);
+        return $this->hasMany(Ticket::class, 'project_id');
     }
 
     public function epics()
     {
-        return $this->hasMany(Epic::class);
+        return $this->hasMany(Epic::class, 'project_id');
     }
 
     public function kanbanColumns()
     {
-        return $this->hasMany(KanbanColumn::class)->orderBy('position');
+        return $this->hasMany(KanbanColumn::class, 'project_id')->orderBy('position');
     }
 
     public function backlogColumn()
     {
-        return $this->hasOne(KanbanColumn::class)
+        return $this->hasOne(KanbanColumn::class, 'project_id')
             ->where('is_backlog_column', true);
     }
 
     public function doneColumn()
     {
-        return $this->hasOne(KanbanColumn::class)
+        return $this->hasOne(KanbanColumn::class, 'project_id')
             ->where('is_done_column', true);
     }
 
     public function activityLogs()
     {
-        return $this->hasMany(ActivityLog::class);
+        return $this->hasMany(ActivityLog::class, 'project_id');
     }
 
     public function timeLogs()
     {
-        return $this->hasMany(TicketTimeLog::class);
+        return $this->hasMany(TicketTimeLog::class, 'project_id');
+    }
+
+    public function labels()
+    {
+        return $this->hasMany(Label::class, 'project_id');
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    public function generateNextIssueNumber(): string
+    {
+        $number = DB::table('projects')
+            ->where('id', $this->id)
+            ->lockForUpdate()
+            ->value('last_issue_number') + 1;
+
+        DB::table('projects')
+            ->where('id', $this->id)
+            ->update(['last_issue_number' => $number]);
+
+        $key = $this->project_key ?? 'PROJ';
+
+        return $key . '-' . $number;
     }
 
     public function createDefaultKanbanColumns(): void

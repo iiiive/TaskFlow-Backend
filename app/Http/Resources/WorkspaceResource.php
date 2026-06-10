@@ -25,16 +25,24 @@ class WorkspaceResource extends JsonResource
             }
         }
 
+        $editRoles = \App\Models\WorkspaceMember::ROLES_CAN_EDIT;
+        $manageRoles = \App\Models\WorkspaceMember::ROLES_CAN_MANAGE_MEMBERS;
+
         return [
             'id' => $this->id,
             'owner_id' => $this->owner_id,
+            'organization_id' => $this->organization_id,
             'name' => $this->name,
             'description' => $this->description,
+            'project_key' => $this->project_key,
+            'project_type' => $this->project_type,
+            'project_mode' => $this->project_mode,
+            'archived_at' => $this->archived_at?->format('Y-m-d H:i:s'),
+            'is_archived' => $this->isArchived(),
 
             'role' => $currentUserRole,
-
-            'can_edit' => in_array($currentUserRole, ['owner', 'editor'], true),
-            'can_manage_members' => $currentUserRole === 'owner',
+            'can_edit' => in_array($currentUserRole, $editRoles, true),
+            'can_manage_members' => in_array($currentUserRole, $manageRoles, true),
 
             'owner' => new UserResource($this->whenLoaded('owner')),
 

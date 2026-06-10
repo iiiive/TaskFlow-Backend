@@ -10,14 +10,15 @@ class KanbanColumnResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
-            'workspace_id' => $this->workspace_id,
-            'name' => $this->name,
-            'slug' => $this->slug,
-            'position' => $this->position,
-            'status_key' => $this->status_key,
+            'id'                => $this->id,
+            'project_id'        => $this->project_id,
+            'name'              => $this->name,
+            'slug'              => $this->slug,
+            'position'          => $this->position,
+            'wip_limit'         => $this->wip_limit,
+            'status_key'        => $this->status_key,
             'is_backlog_column' => $this->is_backlog_column,
-            'is_done_column' => $this->is_done_column,
+            'is_done_column'    => $this->is_done_column,
 
             'tickets' => TicketResource::collection(
                 $this->whenLoaded('tickets')

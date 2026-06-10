@@ -22,38 +22,28 @@ class ActivityLogController extends Controller
         $this->permissionService = $permissionService;
     }
 
-    /**
-     * Get all activity logs inside a workspace.
-     */
-    public function workspaceLogs($workspaceId)
+    public function workspaceLogs($projectId)
     {
         $user = Auth::user();
 
-        $workspace = Workspace::find($workspaceId);
+        $project = Workspace::find($projectId);
 
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($workspace->id, $user->id)) {
-            return response()->json([
-                'message' => 'You do not have access to this workspace activity.',
-            ], 403);
+        if (!$this->permissionService->canView($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have access to this project activity.'], 403);
         }
 
-        $logs = $this->activityLogService->getWorkspaceLogs($workspace->id);
+        $logs = $this->activityLogService->getWorkspaceLogs($project->id);
 
         return response()->json([
-            'message' => 'Workspace activity logs retrieved successfully.',
+            'message' => 'Project activity logs retrieved successfully.',
             'data' => ActivityLogResource::collection($logs),
         ], 200);
     }
 
-    /**
-     * Get all activity logs for one ticket.
-     */
     public function ticketLogs($ticketId)
     {
         $user = Auth::user();
@@ -61,15 +51,11 @@ class ActivityLogController extends Controller
         $ticket = Ticket::find($ticketId);
 
         if (!$ticket) {
-            return response()->json([
-                'message' => 'Ticket not found.',
-            ], 404);
+            return response()->json(['message' => 'Ticket not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($ticket->workspace_id, $user->id)) {
-            return response()->json([
-                'message' => 'You do not have access to this ticket activity.',
-            ], 403);
+        if (!$this->permissionService->canView($ticket->project_id, $user->id)) {
+            return response()->json(['message' => 'You do not have access to this ticket activity.'], 403);
         }
 
         $logs = $this->activityLogService->getTicketLogs($ticket->id);

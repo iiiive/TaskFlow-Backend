@@ -49,35 +49,6 @@ return new class extends Migration
 
         /*
         |--------------------------------------------------------------------------
-        | 2. Make ticket.status compatible with your current workflow
-        |--------------------------------------------------------------------------
-        | Your original create_tickets_table migration only has:
-        | todo, in_progress, in_review, done
-        |
-        | But your current TicketController allows:
-        | ready_for_development, dev_in_progress, ready_for_testing,
-        | ready_for_uat, completed
-        |
-        | Without this ALTER, MySQL can throw:
-        | Data truncated for column 'status'
-        */
-        DB::statement("
-            ALTER TABLE tickets
-            MODIFY status ENUM(
-                'todo',
-                'in_progress',
-                'in_review',
-                'ready_for_development',
-                'dev_in_progress',
-                'ready_for_testing',
-                'ready_for_uat',
-                'done',
-                'completed'
-            ) NOT NULL DEFAULT 'todo'
-        ");
-
-        /*
-        |--------------------------------------------------------------------------
         | 3. Add kanban_column_id to tickets
         |--------------------------------------------------------------------------
         | Tickets can now belong to a dynamic column instead of relying only on status.
@@ -227,15 +198,5 @@ return new class extends Migration
         }
 
         Schema::dropIfExists('kanban_columns');
-
-        DB::statement("
-            ALTER TABLE tickets
-            MODIFY status ENUM(
-                'todo',
-                'in_progress',
-                'in_review',
-                'done'
-            ) NOT NULL DEFAULT 'todo'
-        ");
     }
 };

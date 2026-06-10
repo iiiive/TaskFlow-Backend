@@ -41,28 +41,25 @@ class TicketController extends Controller
         $this->emailNotificationService = $emailNotificationService;
     }
 
-    public function index(Request $request, $workspaceId)
+    public function index(Request $request, $projectId)
     {
         $user = Auth::user();
 
-        $workspace = Workspace::find($workspaceId);
+        $project = Workspace::find($projectId);
 
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($workspace->id, $user->id)) {
-            return response()->json([
-                'message' => 'You do not have access to this workspace.',
-            ], 403);
+        if (!$this->permissionService->canView($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have access to this project.'], 403);
         }
 
         $request->validate([
             'status' => 'nullable|in:' . implode(',', $this->allowedStatuses),
             'kanban_column_id' => 'nullable|integer|exists:kanban_columns,id',
             'epic_id' => 'nullable|integer|exists:epics,id',
+            'issue_type' => 'nullable|in:' . implode(',', Ticket::ISSUE_TYPES),
             'priority' => 'nullable|in:low,medium,high,urgent',
             'assigned_to' => 'nullable|integer|exists:users,id',
             'search' => 'nullable|string|max:255',
@@ -73,40 +70,43 @@ class TicketController extends Controller
         $query = Ticket::with([
             'creator:id,name,email',
             'assignee:id,name,email',
+            'reporter:id,name,email',
             'kanbanColumn',
             'epic',
-        ])->where('workspace_id', $workspace->id);
+            'labels',
+            'parent:id,title,issue_number',
+        ])->where('project_id', $project->id);
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
         if ($request->filled('kanban_column_id')) {
-            $columnBelongsToWorkspace = KanbanColumn::where('id', $request->kanban_column_id)
-                ->where('workspace_id', $workspace->id)
+            $columnBelongsToProject = KanbanColumn::where('id', $request->kanban_column_id)
+                ->where('project_id', $project->id)
                 ->exists();
 
-            if (!$columnBelongsToWorkspace) {
-                return response()->json([
-                    'message' => 'The selected Kanban column does not belong to this workspace.',
-                ], 422);
+            if (!$columnBelongsToProject) {
+                return response()->json(['message' => 'The selected Kanban column does not belong to this project.'], 422);
             }
 
             $query->where('kanban_column_id', $request->kanban_column_id);
         }
 
         if ($request->filled('epic_id')) {
-            $epicBelongsToWorkspace = Epic::where('id', $request->epic_id)
-                ->where('workspace_id', $workspace->id)
+            $epicBelongsToProject = Epic::where('id', $request->epic_id)
+                ->where('project_id', $project->id)
                 ->exists();
 
-            if (!$epicBelongsToWorkspace) {
-                return response()->json([
-                    'message' => 'The selected epic does not belong to this workspace.',
-                ], 422);
+            if (!$epicBelongsToProject) {
+                return response()->json(['message' => 'The selected epic does not belong to this project.'], 422);
             }
 
             $query->where('epic_id', $request->epic_id);
+        }
+
+        if ($request->filled('issue_type')) {
+            $query->where('issue_type', $request->issue_type);
         }
 
         if ($request->filled('priority')) {
@@ -119,10 +119,10 @@ class TicketController extends Controller
 
         if ($request->filled('search')) {
             $search = trim($request->search);
-
-            $query->where(function ($searchQuery) use ($search) {
-                $searchQuery->where('title', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->whereRaw('title ILIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('description ILIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('issue_number ILIKE ?', ["%{$search}%"]);
             });
         }
 
@@ -142,49 +142,50 @@ class TicketController extends Controller
         ], 200);
     }
 
-    public function store(Request $request, $workspaceId)
+    public function store(Request $request, $projectId)
     {
         $user = Auth::user();
 
-        $workspace = Workspace::with('kanbanColumns')->find($workspaceId);
+        $project = Workspace::with('kanbanColumns')->find($projectId);
 
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canCreateOrUpdateTicket($workspace->id, $user->id)) {
-            return response()->json([
-                'message' => 'Only project managers and users can create tickets.',
-            ], 403);
+        if (!$this->permissionService->canCreateOrUpdateTicket($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to create tickets.'], 403);
         }
 
-        if (!$workspace->kanbanColumns()->exists()) {
-            $workspace->createDefaultKanbanColumns();
-            $workspace->load('kanbanColumns');
+        if (!$project->kanbanColumns()->exists()) {
+            $project->createDefaultKanbanColumns();
+            $project->load('kanbanColumns');
         }
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'issue_type' => 'nullable|in:' . implode(',', Ticket::ISSUE_TYPES),
+            'parent_ticket_id' => 'nullable|integer|exists:tickets,id',
             'status' => 'nullable|in:' . implode(',', $this->allowedStatuses),
             'kanban_column_id' => 'nullable|integer|exists:kanban_columns,id',
             'epic_id' => 'nullable|integer|exists:epics,id',
             'priority' => 'nullable|in:low,medium,high,urgent',
+            'reporter_id' => 'nullable|exists:users,id',
             'assigned_to' => 'nullable|exists:users,id',
+            'story_points' => 'nullable|integer|min:0|max:100',
+            'category' => 'nullable|string|max:100',
             'due_date' => 'nullable|date',
+            'label_ids' => 'nullable|array',
+            'label_ids.*' => 'integer|exists:labels,id',
         ]);
 
         if (!empty($validated['epic_id'])) {
             $epic = Epic::where('id', $validated['epic_id'])
-                ->where('workspace_id', $workspace->id)
+                ->where('project_id', $project->id)
                 ->first();
 
             if (!$epic) {
-                return response()->json([
-                    'message' => 'The selected epic does not belong to this workspace.',
-                ], 422);
+                return response()->json(['message' => 'The selected epic does not belong to this project.'], 422);
             }
         }
 
@@ -192,24 +193,17 @@ class TicketController extends Controller
 
         if (!empty($validated['kanban_column_id'])) {
             $column = KanbanColumn::where('id', $validated['kanban_column_id'])
-                ->where('workspace_id', $workspace->id)
+                ->where('project_id', $project->id)
                 ->first();
 
             if (!$column) {
-                return response()->json([
-                    'message' => 'The selected Kanban column does not belong to this workspace.',
-                ], 422);
+                return response()->json(['message' => 'The selected Kanban column does not belong to this project.'], 422);
             }
         } else {
-            $column = $workspace->kanbanColumns()
+            $column = $project->kanbanColumns()
                 ->where('is_backlog_column', true)
-                ->first();
-
-            if (!$column) {
-                $column = $workspace->kanbanColumns()
-                    ->orderBy('position')
-                    ->first();
-            }
+                ->first()
+                ?? $project->kanbanColumns()->orderBy('position')->first();
 
             $validated['kanban_column_id'] = $column?->id;
         }
@@ -221,31 +215,31 @@ class TicketController extends Controller
         }
 
         $validated['priority'] = $validated['priority'] ?? 'medium';
+        $validated['issue_type'] = $validated['issue_type'] ?? 'task';
 
-        $ticket = $this->ticketService->createTicket(
-            $workspace,
-            $user->id,
-            $validated
-        );
+        $ticket = $this->ticketService->createTicket($project, $user->id, $validated);
 
         $ticket->epic_id = $validated['epic_id'] ?? null;
         $ticket->save();
 
+        if (!empty($validated['label_ids'])) {
+            $ticket->labels()->sync($validated['label_ids']);
+        }
+
         $ticket->load([
             'creator:id,name,email',
             'assignee:id,name,email',
+            'reporter:id,name,email',
             'kanbanColumn',
             'epic',
+            'labels',
+            'parent:id,title,issue_number',
         ]);
 
-        $columnName = $this->resolveColumnName(
-            $ticket->workspace_id,
-            $ticket->kanban_column_id,
-            $ticket->status
-        );
+        $columnName = $this->resolveColumnName($ticket->project_id, $ticket->kanban_column_id, $ticket->status);
 
         $this->createAndSendActivity(
-            $ticket->workspace_id,
+            $ticket->project_id,
             $ticket->id,
             $user->id,
             'ticket_created',
@@ -265,20 +259,20 @@ class TicketController extends Controller
         $ticket = Ticket::with([
             'creator:id,name,email',
             'assignee:id,name,email',
+            'reporter:id,name,email',
             'kanbanColumn',
             'epic',
+            'labels',
+            'parent:id,title,issue_number',
+            'children:id,title,issue_number,status,priority,issue_type',
         ])->find($ticketId);
 
         if (!$ticket) {
-            return response()->json([
-                'message' => 'Ticket not found.',
-            ], 404);
+            return response()->json(['message' => 'Ticket not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($ticket->workspace_id, $user->id)) {
-            return response()->json([
-                'message' => 'You do not have access to this ticket.',
-            ], 403);
+        if (!$this->permissionService->canView($ticket->project_id, $user->id)) {
+            return response()->json(['message' => 'You do not have access to this ticket.'], 403);
         }
 
         return response()->json([
@@ -299,15 +293,11 @@ class TicketController extends Controller
         ])->find($ticketId);
 
         if (!$ticket) {
-            return response()->json([
-                'message' => 'Ticket not found.',
-            ], 404);
+            return response()->json(['message' => 'Ticket not found.'], 404);
         }
 
-        if (!$this->permissionService->canCreateOrUpdateTicket($ticket->workspace_id, $user->id)) {
-            return response()->json([
-                'message' => 'Only project managers and users can update tickets.',
-            ], 403);
+        if (!$this->permissionService->canCreateOrUpdateTicket($ticket->project_id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to update tickets.'], 403);
         }
 
         $oldTitle = $ticket->title;
@@ -317,48 +307,45 @@ class TicketController extends Controller
         $oldEpicId = $ticket->epic_id;
         $oldAssignedTo = $ticket->assigned_to;
         $oldAssigneeName = $ticket->assignee?->name ?? $ticket->assignee?->email ?? 'Unassigned';
-
         $oldKanbanColumnId = $ticket->kanban_column_id;
         $oldStatus = $ticket->status;
-
-        $oldColumnName = $this->resolveColumnName(
-            $ticket->workspace_id,
-            $ticket->kanban_column_id,
-            $ticket->status
-        );
+        $oldColumnName = $this->resolveColumnName($ticket->project_id, $ticket->kanban_column_id, $ticket->status);
 
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
+            'issue_type' => 'nullable|in:' . implode(',', Ticket::ISSUE_TYPES),
+            'parent_ticket_id' => 'nullable|integer|exists:tickets,id',
             'status' => 'nullable|in:' . implode(',', $this->allowedStatuses),
             'kanban_column_id' => 'nullable|integer|exists:kanban_columns,id',
             'epic_id' => 'nullable|integer|exists:epics,id',
             'priority' => 'nullable|in:low,medium,high,urgent',
+            'reporter_id' => 'nullable|exists:users,id',
             'assigned_to' => 'nullable|exists:users,id',
+            'story_points' => 'nullable|integer|min:0|max:100',
+            'category' => 'nullable|string|max:100',
             'due_date' => 'nullable|date',
+            'label_ids' => 'nullable|array',
+            'label_ids.*' => 'integer|exists:labels,id',
         ]);
 
         if (array_key_exists('epic_id', $validated) && !empty($validated['epic_id'])) {
             $epic = Epic::where('id', $validated['epic_id'])
-                ->where('workspace_id', $ticket->workspace_id)
+                ->where('project_id', $ticket->project_id)
                 ->first();
 
             if (!$epic) {
-                return response()->json([
-                    'message' => 'The selected epic does not belong to this ticket workspace.',
-                ], 422);
+                return response()->json(['message' => 'The selected epic does not belong to this project.'], 422);
             }
         }
 
         if (array_key_exists('kanban_column_id', $validated) && !empty($validated['kanban_column_id'])) {
             $column = KanbanColumn::where('id', $validated['kanban_column_id'])
-                ->where('workspace_id', $ticket->workspace_id)
+                ->where('project_id', $ticket->project_id)
                 ->first();
 
             if (!$column) {
-                return response()->json([
-                    'message' => 'The selected Kanban column does not belong to this ticket workspace.',
-                ], 422);
+                return response()->json(['message' => 'The selected Kanban column does not belong to this project.'], 422);
             }
 
             if ($column->status_key) {
@@ -368,11 +355,8 @@ class TicketController extends Controller
             }
         }
 
-        if (
-            array_key_exists('status', $validated)
-            && !array_key_exists('kanban_column_id', $validated)
-        ) {
-            $matchingColumn = KanbanColumn::where('workspace_id', $ticket->workspace_id)
+        if (array_key_exists('status', $validated) && !array_key_exists('kanban_column_id', $validated)) {
+            $matchingColumn = KanbanColumn::where('project_id', $ticket->project_id)
                 ->where('status_key', $validated['status'])
                 ->first();
 
@@ -381,21 +365,24 @@ class TicketController extends Controller
             }
         }
 
-        $ticket = $this->ticketService->updateTicket(
-            $ticket,
-            $validated
-        );
+        $ticket = $this->ticketService->updateTicket($ticket, $validated);
 
         if (array_key_exists('epic_id', $validated)) {
             $ticket->epic_id = $validated['epic_id'] ?? null;
             $ticket->save();
         }
 
+        if (array_key_exists('label_ids', $validated)) {
+            $ticket->labels()->sync($validated['label_ids'] ?? []);
+        }
+
         $ticket->load([
             'creator:id,name,email',
             'assignee:id,name,email',
+            'reporter:id,name,email',
             'kanbanColumn',
             'epic',
+            'labels',
         ]);
 
         $this->logAccurateTicketUpdateActivities(
@@ -427,34 +414,28 @@ class TicketController extends Controller
         $ticket = Ticket::find($ticketId);
 
         if (!$ticket) {
-            return response()->json([
-                'message' => 'Ticket not found.',
-            ], 404);
+            return response()->json(['message' => 'Ticket not found.'], 404);
         }
 
-        if (!$this->permissionService->canDeleteTicket($ticket->workspace_id, $user->id)) {
-            return response()->json([
-                'message' => 'Only the project manager can delete tickets.',
-            ], 403);
+        if (!$this->permissionService->canDeleteTicket($ticket->project_id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to delete tickets.'], 403);
         }
 
         $ticketTitle = $ticket->title;
-        $workspaceId = $ticket->workspace_id;
+        $projectId = $ticket->project_id;
         $ticketIdForLog = $ticket->id;
 
         $this->ticketService->deleteTicket($ticket);
 
         $this->createAndSendActivity(
-            $workspaceId,
+            $projectId,
             $ticketIdForLog,
             $user->id,
             'ticket_deleted',
             $user->name . ' deleted ticket "' . $ticketTitle . '".'
         );
 
-        return response()->json([
-            'message' => 'Ticket deleted successfully.',
-        ], 200);
+        return response()->json(['message' => 'Ticket deleted successfully.'], 200);
     }
 
     public function insights($ticketId)
@@ -464,15 +445,11 @@ class TicketController extends Controller
         $ticket = Ticket::find($ticketId);
 
         if (!$ticket) {
-            return response()->json([
-                'message' => 'Ticket not found.',
-            ], 404);
+            return response()->json(['message' => 'Ticket not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($ticket->workspace_id, $user->id)) {
-            return response()->json([
-                'message' => 'You do not have access to this ticket.',
-            ], 403);
+        if (!$this->permissionService->canView($ticket->project_id, $user->id)) {
+            return response()->json(['message' => 'You do not have access to this ticket.'], 403);
         }
 
         $insightService = app(\App\Services\TicketInsightService::class);
@@ -498,12 +475,7 @@ class TicketController extends Controller
         ?string $oldColumnName,
         array $requestData
     ): void {
-        $newColumnName = $this->resolveColumnName(
-            $ticket->workspace_id,
-            $ticket->kanban_column_id,
-            $ticket->status
-        );
-
+        $newColumnName = $this->resolveColumnName($ticket->project_id, $ticket->kanban_column_id, $ticket->status);
         $newAssigneeName = $ticket->assignee?->name ?? $ticket->assignee?->email ?? 'Unassigned';
 
         if (
@@ -511,34 +483,17 @@ class TicketController extends Controller
             && (int) ($oldKanbanColumnId ?? 0) !== (int) ($ticket->kanban_column_id ?? 0)
         ) {
             $this->createAndSendActivity(
-                $ticket->workspace_id,
-                $ticket->id,
-                $user->id,
+                $ticket->project_id, $ticket->id, $user->id,
                 'ticket_moved',
                 $user->name . ' moved ticket "' . $ticket->title . '" from "' . $oldColumnName . '" to "' . $newColumnName . '".'
             );
-        } elseif (
-            array_key_exists('status', $requestData)
-            && $oldStatus !== $ticket->status
-        ) {
-            $oldStatusName = $this->resolveColumnName(
-                $ticket->workspace_id,
-                $oldKanbanColumnId,
-                $oldStatus
-            );
-
-            $newStatusName = $this->resolveColumnName(
-                $ticket->workspace_id,
-                $ticket->kanban_column_id,
-                $ticket->status
-            );
-
+        } elseif (array_key_exists('status', $requestData) && $oldStatus !== $ticket->status) {
             $this->createAndSendActivity(
-                $ticket->workspace_id,
-                $ticket->id,
-                $user->id,
+                $ticket->project_id, $ticket->id, $user->id,
                 'ticket_moved',
-                $user->name . ' moved ticket "' . $ticket->title . '" from "' . $oldStatusName . '" to "' . $newStatusName . '".'
+                $user->name . ' moved ticket "' . $ticket->title . '" from "' .
+                $this->resolveColumnName($ticket->project_id, $oldKanbanColumnId, $oldStatus) .
+                '" to "' . $this->resolveColumnName($ticket->project_id, $ticket->kanban_column_id, $ticket->status) . '".'
             );
         }
 
@@ -547,54 +502,34 @@ class TicketController extends Controller
             && (int) ($oldAssignedTo ?? 0) !== (int) ($ticket->assigned_to ?? 0)
         ) {
             $description = $ticket->assigned_to
-                ? $user->name . ' assigned ticket "' . $ticket->title . '" from "' . $oldAssigneeName . '" to "' . $newAssigneeName . '".'
-                : $user->name . ' removed the assignee from ticket "' . $ticket->title . '".';
+                ? $user->name . ' assigned "' . $ticket->title . '" from "' . $oldAssigneeName . '" to "' . $newAssigneeName . '".'
+                : $user->name . ' removed the assignee from "' . $ticket->title . '".';
 
-            $this->createAndSendActivity(
-                $ticket->workspace_id,
-                $ticket->id,
-                $user->id,
-                'ticket_assignee_updated',
-                $description
-            );
+            $this->createAndSendActivity($ticket->project_id, $ticket->id, $user->id, 'ticket_assignee_updated', $description);
         }
 
-        if (
-            array_key_exists('priority', $requestData)
-            && $oldPriority !== $ticket->priority
-        ) {
+        if (array_key_exists('priority', $requestData) && $oldPriority !== $ticket->priority) {
             $this->createAndSendActivity(
-                $ticket->workspace_id,
-                $ticket->id,
-                $user->id,
+                $ticket->project_id, $ticket->id, $user->id,
                 'ticket_priority_updated',
-                $user->name . ' changed the priority of ticket "' . $ticket->title . '" from "' . $this->formatStatusLabel($oldPriority) . '" to "' . $this->formatStatusLabel($ticket->priority) . '".'
+                $user->name . ' changed the priority of "' . $ticket->title . '" from "' .
+                $this->formatStatusLabel($oldPriority) . '" to "' . $this->formatStatusLabel($ticket->priority) . '".'
             );
         }
 
-        if (
-            array_key_exists('title', $requestData)
-            && $oldTitle !== $ticket->title
-        ) {
+        if (array_key_exists('title', $requestData) && $oldTitle !== $ticket->title) {
             $this->createAndSendActivity(
-                $ticket->workspace_id,
-                $ticket->id,
-                $user->id,
+                $ticket->project_id, $ticket->id, $user->id,
                 'ticket_title_updated',
-                $user->name . ' renamed ticket "' . $oldTitle . '" to "' . $ticket->title . '".'
+                $user->name . ' renamed "' . $oldTitle . '" to "' . $ticket->title . '".'
             );
         }
 
-        if (
-            array_key_exists('description', $requestData)
-            && $oldDescription !== $ticket->description
-        ) {
+        if (array_key_exists('description', $requestData) && $oldDescription !== $ticket->description) {
             $this->createAndSendActivity(
-                $ticket->workspace_id,
-                $ticket->id,
-                $user->id,
+                $ticket->project_id, $ticket->id, $user->id,
                 'ticket_description_updated',
-                $user->name . ' updated the description of ticket "' . $ticket->title . '".'
+                $user->name . ' updated the description of "' . $ticket->title . '".'
             );
         }
 
@@ -606,11 +541,9 @@ class TicketController extends Controller
             $newDate = $ticket->due_date ? date('F d, Y', strtotime((string) $ticket->due_date)) : 'No due date';
 
             $this->createAndSendActivity(
-                $ticket->workspace_id,
-                $ticket->id,
-                $user->id,
+                $ticket->project_id, $ticket->id, $user->id,
                 'ticket_due_date_updated',
-                $user->name . ' changed the due date of ticket "' . $ticket->title . '" from "' . $oldDate . '" to "' . $newDate . '".'
+                $user->name . ' changed the due date of "' . $ticket->title . '" from "' . $oldDate . '" to "' . $newDate . '".'
             );
         }
 
@@ -619,30 +552,23 @@ class TicketController extends Controller
             && (int) ($oldEpicId ?? 0) !== (int) ($ticket->epic_id ?? 0)
         ) {
             $epicName = $ticket->epic?->title ?? $ticket->epic?->name ?? 'No Epic';
-
             $description = $ticket->epic_id
-                ? $user->name . ' assigned ticket "' . $ticket->title . '" to epic "' . $epicName . '".'
-                : $user->name . ' removed ticket "' . $ticket->title . '" from its epic.';
+                ? $user->name . ' assigned "' . $ticket->title . '" to epic "' . $epicName . '".'
+                : $user->name . ' removed "' . $ticket->title . '" from its epic.';
 
-            $this->createAndSendActivity(
-                $ticket->workspace_id,
-                $ticket->id,
-                $user->id,
-                'ticket_epic_updated',
-                $description
-            );
+            $this->createAndSendActivity($ticket->project_id, $ticket->id, $user->id, 'ticket_epic_updated', $description);
         }
     }
 
     private function createAndSendActivity(
-        int $workspaceId,
+        int $projectId,
         ?int $ticketId,
         int $userId,
         string $action,
         string $description
     ): void {
         $activityLog = ActivityLog::create([
-            'workspace_id' => $workspaceId,
+            'project_id' => $projectId,
             'ticket_id' => $ticketId,
             'user_id' => $userId,
             'action' => $action,
@@ -652,28 +578,25 @@ class TicketController extends Controller
         $this->emailNotificationService->sendActivityNotification($activityLog);
     }
 
-    private function resolveColumnName(
-        int $workspaceId,
-        mixed $kanbanColumnId = null,
-        ?string $status = null
-    ): string {
+    private function resolveColumnName(int $projectId, mixed $kanbanColumnId = null, ?string $status = null): string
+    {
         if ($kanbanColumnId) {
-            $columnName = KanbanColumn::where('workspace_id', $workspaceId)
+            $name = KanbanColumn::where('project_id', $projectId)
                 ->where('id', $kanbanColumnId)
                 ->value('name');
 
-            if ($columnName) {
-                return $columnName;
+            if ($name) {
+                return $name;
             }
         }
 
         if ($status) {
-            $columnName = KanbanColumn::where('workspace_id', $workspaceId)
+            $name = KanbanColumn::where('project_id', $projectId)
                 ->where('status_key', $status)
                 ->value('name');
 
-            if ($columnName) {
-                return $columnName;
+            if ($name) {
+                return $name;
             }
         }
 
@@ -686,9 +609,6 @@ class TicketController extends Controller
             return 'None';
         }
 
-        return str($value)
-            ->replace(['_', '-'], ' ')
-            ->title()
-            ->toString();
+        return str($value)->replace(['_', '-'], ' ')->title()->toString();
     }
 }

@@ -40,7 +40,7 @@ class WorkspaceActivityNotificationMail extends Mailable
 
     public function build()
     {
-        $workspaceName = $this->activityLog->workspace?->name ?? 'Planora Workspace';
+        $workspaceName = $this->activityLog->workspace?->name ?? 'Planora Project';
 
         $actionTitle = $this->formatActionTitle($this->activityLog->action);
 
@@ -124,11 +124,11 @@ class WorkspaceActivityNotificationMail extends Mailable
     {
         $frontendUrl = rtrim((string) env('FRONTEND_URL', ''), '/');
 
-        if (!$frontendUrl || !$this->activityLog->workspace_id) {
+        if (!$frontendUrl || !$this->activityLog->project_id) {
             return null;
         }
 
-        return $frontendUrl . '/workspaces/' . $this->activityLog->workspace_id . '/board';
+        return $frontendUrl . '/projects/' . $this->activityLog->project_id . '/board';
     }
 
     private function buildTicketUrl(): ?string

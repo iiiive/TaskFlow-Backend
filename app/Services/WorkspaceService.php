@@ -34,32 +34,28 @@ class WorkspaceService
     {
         $workspace = Workspace::create([
             'owner_id' => $user->id,
+            'organization_id' => $user->organization_id,
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
+            'project_key' => $data['project_key'] ?? null,
+            'project_type' => $data['project_type'] ?? 'software',
+            'project_mode' => $data['project_mode'] ?? 'kanban',
         ]);
 
         WorkspaceMember::create([
-            'workspace_id' => $workspace->id,
+            'project_id' => $workspace->id,
             'user_id' => $user->id,
             'role' => 'owner',
         ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Create default Kanban workflow
-        |--------------------------------------------------------------------------
-        | New workspaces now automatically get:
-        | Backlog → Ready for Development → Dev In Progress → Ready for Testing
-        | → Ready for UAT → Done
-        */
         $workspace->createDefaultKanbanColumns();
 
         $this->activityLogService->create(
             $workspace->id,
             null,
             $user->id,
-            'workspace_created',
-            'Workspace was created.'
+            'project_created',
+            'Project "' . $workspace->name . '" was created.'
         );
 
         return $workspace->load([
@@ -71,19 +67,20 @@ class WorkspaceService
 
     public function updateWorkspace(Workspace $workspace, array $data, int $userId): Workspace
     {
-        $workspace->update([
+        $workspace->update(array_filter([
             'name' => $data['name'] ?? $workspace->name,
-            'description' => array_key_exists('description', $data)
-                ? $data['description']
-                : $workspace->description,
-        ]);
+            'description' => array_key_exists('description', $data) ? $data['description'] : $workspace->description,
+            'project_key' => $data['project_key'] ?? $workspace->project_key,
+            'project_type' => $data['project_type'] ?? $workspace->project_type,
+            'project_mode' => $data['project_mode'] ?? $workspace->project_mode,
+        ], fn ($v) => $v !== null));
 
         $this->activityLogService->create(
             $workspace->id,
             null,
             $userId,
-            'workspace_updated',
-            'Workspace details were updated.'
+            'project_updated',
+            'Project details were updated.'
         );
 
         return $workspace->load([
@@ -99,8 +96,8 @@ class WorkspaceService
             $workspace->id,
             null,
             $userId,
-            'workspace_deleted',
-            'Workspace was deleted.'
+            'project_deleted',
+            'Project "' . $workspace->name . '" was deleted.'
         );
 
         $workspace->delete();

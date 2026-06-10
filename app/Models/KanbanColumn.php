@@ -10,24 +10,26 @@ class KanbanColumn extends Model
     use HasFactory;
 
     protected $fillable = [
-        'workspace_id',
+        'project_id',
         'name',
         'slug',
         'position',
+        'wip_limit',
         'status_key',
         'is_backlog_column',
         'is_done_column',
     ];
 
     protected $casts = [
-        'position' => 'integer',
+        'position'         => 'integer',
+        'wip_limit'        => 'integer',
         'is_backlog_column' => 'boolean',
-        'is_done_column' => 'boolean',
+        'is_done_column'   => 'boolean',
     ];
 
     public function workspace()
     {
-        return $this->belongsTo(Workspace::class);
+        return $this->belongsTo(Workspace::class, 'project_id');
     }
 
     public function tickets()

@@ -10,7 +10,7 @@ class TicketTimeLog extends Model
     use HasFactory;
 
     protected $fillable = [
-        'workspace_id',
+        'project_id',
         'ticket_id',
         'user_id',
         'hours',
@@ -25,7 +25,7 @@ class TicketTimeLog extends Model
 
     public function workspace()
     {
-        return $this->belongsTo(Workspace::class);
+        return $this->belongsTo(Workspace::class, 'project_id');
     }
 
     public function ticket()

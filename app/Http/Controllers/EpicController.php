@@ -19,27 +19,23 @@ class EpicController extends Controller
         $this->permissionService = $permissionService;
     }
 
-    public function index($workspaceId)
+    public function index($projectId)
     {
         $user = Auth::user();
 
-        $workspace = Workspace::find($workspaceId);
+        $project = Workspace::find($projectId);
 
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($workspace->id, $user->id)) {
-            return response()->json([
-                'message' => 'You do not have access to this workspace.',
-            ], 403);
+        if (!$this->permissionService->canView($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have access to this project.'], 403);
         }
 
         $epics = Epic::with('creator:id,name,email')
             ->withCount('tickets')
-            ->where('workspace_id', $workspace->id)
+            ->where('project_id', $project->id)
             ->latest()
             ->get();
 
@@ -49,22 +45,18 @@ class EpicController extends Controller
         ], 200);
     }
 
-    public function store(Request $request, $workspaceId)
+    public function store(Request $request, $projectId)
     {
         $user = Auth::user();
 
-        $workspace = Workspace::find($workspaceId);
+        $project = Workspace::find($projectId);
 
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canCreateOrUpdateTicket($workspace->id, $user->id)) {
-            return response()->json([
-                'message' => 'Only project managers and users can create epics.',
-            ], 403);
+        if (!$this->permissionService->canCreateOrUpdateTicket($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to create epics.'], 403);
         }
 
         $request->merge([
@@ -78,8 +70,8 @@ class EpicController extends Controller
                 'required',
                 'string',
                 'max:100',
-                Rule::unique('epics', 'name')->where(function ($query) use ($workspace) {
-                    return $query->where('workspace_id', $workspace->id);
+                Rule::unique('epics', 'name')->where(function ($query) use ($project) {
+                    return $query->where('project_id', $project->id);
                 }),
             ],
             'description' => 'nullable|string|max:1000',
@@ -87,7 +79,7 @@ class EpicController extends Controller
         ]);
 
         $epic = Epic::create([
-            'workspace_id' => $workspace->id,
+            'project_id' => $project->id,
             'created_by' => $user->id,
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
@@ -114,15 +106,11 @@ class EpicController extends Controller
         ])->find($epicId);
 
         if (!$epic) {
-            return response()->json([
-                'message' => 'Epic not found.',
-            ], 404);
+            return response()->json(['message' => 'Epic not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($epic->workspace_id, $user->id)) {
-            return response()->json([
-                'message' => 'You do not have access to this epic.',
-            ], 403);
+        if (!$this->permissionService->canView($epic->project_id, $user->id)) {
+            return response()->json(['message' => 'You do not have access to this epic.'], 403);
         }
 
         return response()->json([
@@ -138,15 +126,11 @@ class EpicController extends Controller
         $epic = Epic::find($epicId);
 
         if (!$epic) {
-            return response()->json([
-                'message' => 'Epic not found.',
-            ], 404);
+            return response()->json(['message' => 'Epic not found.'], 404);
         }
 
-        if (!$this->permissionService->canCreateOrUpdateTicket($epic->workspace_id, $user->id)) {
-            return response()->json([
-                'message' => 'Only project managers and users can update epics.',
-            ], 403);
+        if (!$this->permissionService->canCreateOrUpdateTicket($epic->project_id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to update epics.'], 403);
         }
 
         $request->merge([
@@ -164,7 +148,7 @@ class EpicController extends Controller
                 Rule::unique('epics', 'name')
                     ->ignore($epic->id)
                     ->where(function ($query) use ($epic) {
-                        return $query->where('workspace_id', $epic->workspace_id);
+                        return $query->where('project_id', $epic->project_id);
                     }),
             ],
             'description' => 'nullable|string|max:1000',
@@ -172,7 +156,6 @@ class EpicController extends Controller
         ]);
 
         $epic->update($validated);
-
         $epic->load('creator:id,name,email');
         $epic->loadCount('tickets');
 
@@ -189,21 +172,15 @@ class EpicController extends Controller
         $epic = Epic::find($epicId);
 
         if (!$epic) {
-            return response()->json([
-                'message' => 'Epic not found.',
-            ], 404);
+            return response()->json(['message' => 'Epic not found.'], 404);
         }
 
-        if (!$this->permissionService->canCreateOrUpdateTicket($epic->workspace_id, $user->id)) {
-            return response()->json([
-                'message' => 'Only project managers and users can delete epics.',
-            ], 403);
+        if (!$this->permissionService->canCreateOrUpdateTicket($epic->project_id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to delete epics.'], 403);
         }
 
         $epic->delete();
 
-        return response()->json([
-            'message' => 'Epic deleted successfully.',
-        ], 200);
+        return response()->json(['message' => 'Epic deleted successfully.'], 200);
     }
 }

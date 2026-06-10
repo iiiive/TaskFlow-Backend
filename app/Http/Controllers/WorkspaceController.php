@@ -8,6 +8,7 @@ use App\Services\WorkspacePermissionService;
 use App\Services\WorkspaceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class WorkspaceController extends Controller
 {
@@ -26,45 +27,41 @@ class WorkspaceController extends Controller
     {
         $user = Auth::user();
 
-        $workspaces = $this->workspaceService->getUserWorkspaces($user);
+        $projects = $this->workspaceService->getUserWorkspaces($user);
 
         return response()->json([
-            'message' => 'Workspaces retrieved successfully.',
-            'data' => WorkspaceResource::collection($workspaces),
+            'message' => 'Projects retrieved successfully.',
+            'data' => WorkspaceResource::collection($projects),
         ], 200);
     }
 
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'project_key' => 'nullable|string|max:10|alpha_num|uppercase',
+            'project_type' => 'nullable|in:software,it_support,marketing,hr,construction,general',
+            'project_mode' => 'nullable|in:kanban,scrum',
         ]);
 
-        $workspace = $this->workspaceService->createWorkspace(
-            Auth::user(),
-            $request->only(['name', 'description'])
-        );
+        $user = Auth::user();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Create default Kanban columns
-        |--------------------------------------------------------------------------
-        | Every new workspace starts with:
-        | Backlog → Ready for Development → Dev In Progress → Ready for Testing
-        | → Ready for UAT → Done
-        */
-        $workspace->createDefaultKanbanColumns();
+        if (empty($validated['project_key'])) {
+            $validated['project_key'] = $this->generateProjectKey($validated['name']);
+        }
 
-        $workspace->load([
+        $project = $this->workspaceService->createWorkspace($user, $validated);
+
+        $project->load([
             'owner:id,name,email',
             'workspaceMembers.user:id,name,email',
             'kanbanColumns',
         ]);
 
         return response()->json([
-            'message' => 'Workspace created successfully.',
-            'data' => new WorkspaceResource($workspace),
+            'message' => 'Project created successfully.',
+            'data' => new WorkspaceResource($project),
         ], 201);
     }
 
@@ -72,27 +69,23 @@ class WorkspaceController extends Controller
     {
         $user = Auth::user();
 
-        $workspace = Workspace::with([
+        $project = Workspace::with([
             'owner:id,name,email',
             'workspaceMembers.user:id,name,email',
             'kanbanColumns',
         ])->find($id);
 
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($workspace->id, $user->id)) {
-            return response()->json([
-                'message' => 'You do not have access to this workspace.',
-            ], 403);
+        if (!$this->permissionService->canView($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have access to this project.'], 403);
         }
 
         return response()->json([
-            'message' => 'Workspace retrieved successfully.',
-            'data' => new WorkspaceResource($workspace),
+            'message' => 'Project retrieved successfully.',
+            'data' => new WorkspaceResource($project),
         ], 200);
     }
 
@@ -100,40 +93,37 @@ class WorkspaceController extends Controller
     {
         $user = Auth::user();
 
-        $workspace = Workspace::find($id);
+        $project = Workspace::find($id);
 
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($workspace->owner_id, $user->id)) {
-            return response()->json([
-                'message' => 'Only the workspace owner can update this workspace.',
-            ], 403);
+        if (!$this->permissionService->canManageWorkspace($project->owner_id, $user->id)) {
+            return response()->json(['message' => 'Only the project owner can update this project.'], 403);
         }
 
-        $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string',
+        $validated = $request->validate([
+            'name'                 => 'sometimes|required|string|max:255',
+            'description'          => 'nullable|string',
+            'project_key'          => 'sometimes|nullable|string|max:10|alpha_num|uppercase',
+            'project_type'         => 'nullable|in:software,it_support,marketing,hr,construction,general',
+            'project_mode'         => 'nullable|in:kanban,scrum',
+            'auto_assign_enabled'  => 'nullable|boolean',
+            'auto_assign_strategy' => 'nullable|in:round_robin,least_loaded',
         ]);
 
-        $workspace = $this->workspaceService->updateWorkspace(
-            $workspace,
-            $request->only(['name', 'description']),
-            $user->id
-        );
+        $project = $this->workspaceService->updateWorkspace($project, $validated, $user->id);
 
-        $workspace->load([
+        $project->load([
             'owner:id,name,email',
             'workspaceMembers.user:id,name,email',
             'kanbanColumns',
         ]);
 
         return response()->json([
-            'message' => 'Workspace updated successfully.',
-            'data' => new WorkspaceResource($workspace),
+            'message' => 'Project updated successfully.',
+            'data' => new WorkspaceResource($project),
         ], 200);
     }
 
@@ -141,24 +131,76 @@ class WorkspaceController extends Controller
     {
         $user = Auth::user();
 
-        $workspace = Workspace::find($id);
+        $project = Workspace::find($id);
 
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($workspace->owner_id, $user->id)) {
-            return response()->json([
-                'message' => 'Only the workspace owner can delete this workspace.',
-            ], 403);
+        if (!$this->permissionService->canManageWorkspace($project->owner_id, $user->id)) {
+            return response()->json(['message' => 'Only the project owner can delete this project.'], 403);
         }
 
-        $this->workspaceService->deleteWorkspace($workspace, $user->id);
+        $this->workspaceService->deleteWorkspace($project, $user->id);
 
-        return response()->json([
-            'message' => 'Workspace deleted successfully.',
-        ], 200);
+        return response()->json(['message' => 'Project deleted successfully.'], 200);
+    }
+
+    public function archive($id)
+    {
+        $user = Auth::user();
+        $project = Workspace::find($id);
+
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
+        }
+
+        if (!$this->permissionService->canManageWorkspace($project->owner_id, $user->id)) {
+            return response()->json(['message' => 'Only the project owner can archive this project.'], 403);
+        }
+
+        $project->update(['archived_at' => now()]);
+
+        return response()->json(['message' => 'Project archived successfully.']);
+    }
+
+    public function unarchive($id)
+    {
+        $user = Auth::user();
+        $project = Workspace::find($id);
+
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
+        }
+
+        if (!$this->permissionService->canManageWorkspace($project->owner_id, $user->id)) {
+            return response()->json(['message' => 'Only the project owner can unarchive this project.'], 403);
+        }
+
+        $project->update(['archived_at' => null]);
+
+        return response()->json(['message' => 'Project unarchived successfully.']);
+    }
+
+    private function generateProjectKey(string $name): string
+    {
+        $words = preg_split('/[\s\-_]+/', strtoupper(trim($name)));
+        $key = '';
+
+        if (count($words) === 1) {
+            $key = substr($words[0], 0, 5);
+        } else {
+            foreach ($words as $word) {
+                $key .= substr($word, 0, 1);
+                if (strlen($key) >= 5) {
+                    break;
+                }
+            }
+        }
+
+        $key = preg_replace('/[^A-Z0-9]/', '', $key);
+        $key = $key ?: 'PROJ';
+
+        return substr($key, 0, 5);
     }
 }

@@ -23,159 +23,113 @@ class WorkspaceMemberController extends Controller
         $this->permissionService = $permissionService;
     }
 
-    /**
-     * Show all members inside a workspace.
-     * Any workspace member can view the member list.
-     */
-    public function index($workspaceId)
+    public function index($projectId)
     {
         $user = Auth::user();
+        $project = Workspace::find($projectId);
 
-        $workspace = Workspace::find($workspaceId);
-
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($workspace->id, $user->id)) {
-            return response()->json([
-                'message' => 'You do not have access to this workspace.',
-            ], 403);
+        if (!$this->permissionService->canView($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have access to this project.'], 403);
         }
 
-        $members = $this->memberService->getMembers($workspace);
+        $members = $this->memberService->getMembers($project);
 
         return response()->json([
-            'message' => 'Workspace members retrieved successfully.',
+            'message' => 'Project members retrieved successfully.',
             'data' => WorkspaceMemberResource::collection($members),
         ], 200);
     }
 
-    /**
-     * Add a new member.
-     * Only owner can add members.
-     */
-    public function store(Request $request, $workspaceId)
+    public function store(Request $request, $projectId)
     {
         $authUser = Auth::user();
+        $project = Workspace::find($projectId);
 
-        $workspace = Workspace::find($workspaceId);
-
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($workspace->owner_id, $authUser->id)) {
-            return response()->json([
-                'message' => 'Only the workspace owner can add members.',
-            ], 403);
+        if (!$this->permissionService->canManageMembers($project->id, $authUser->id)) {
+            return response()->json(['message' => 'Only the project owner or admin can add members.'], 403);
         }
 
         $request->validate([
             'email' => 'required|email|exists:users,email',
-            'role' => 'required|in:editor,viewer',
+            'role' => 'required|in:' . implode(',', WorkspaceMember::ROLES),
         ]);
 
         $member = $this->memberService->addMember(
-            $workspace,
+            $project,
             $authUser,
             $request->only(['email', 'role'])
         );
 
         return response()->json([
-            'message' => 'Workspace member added successfully.',
+            'message' => 'Project member added successfully.',
             'data' => new WorkspaceMemberResource($member),
         ], 201);
     }
 
-    /**
-     * Update member role.
-     * Only owner can update roles.
-     */
-    public function update(Request $request, $workspaceId, $memberId)
+    public function update(Request $request, $projectId, $memberId)
     {
         $authUser = Auth::user();
+        $project = Workspace::find($projectId);
 
-        $workspace = Workspace::find($workspaceId);
-
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($workspace->owner_id, $authUser->id)) {
-            return response()->json([
-                'message' => 'Only the workspace owner can update member roles.',
-            ], 403);
+        if (!$this->permissionService->canManageMembers($project->id, $authUser->id)) {
+            return response()->json(['message' => 'Only the project owner or admin can update member roles.'], 403);
         }
 
         $request->validate([
-            'role' => 'required|in:editor,viewer',
+            'role' => 'required|in:' . implode(',', WorkspaceMember::ROLES),
         ]);
 
-        $member = WorkspaceMember::where('workspace_id', $workspace->id)
+        $member = WorkspaceMember::where('project_id', $project->id)
             ->where('id', $memberId)
             ->first();
 
         if (!$member) {
-            return response()->json([
-                'message' => 'Workspace member not found.',
-            ], 404);
+            return response()->json(['message' => 'Project member not found.'], 404);
         }
 
-        $member = $this->memberService->updateRole(
-        $member,
-        $request->role,
-        $authUser->id
-        );
+        $member = $this->memberService->updateRole($member, $request->role, $authUser->id);
 
         return response()->json([
-            'message' => 'Workspace member role updated successfully.',
+            'message' => 'Project member role updated successfully.',
             'data' => new WorkspaceMemberResource($member),
         ], 200);
     }
 
-    /**
-     * Remove member from workspace.
-     * Only owner can remove members.
-     */
-    public function destroy($workspaceId, $memberId)
+    public function destroy($projectId, $memberId)
     {
         $authUser = Auth::user();
+        $project = Workspace::find($projectId);
 
-        $workspace = Workspace::find($workspaceId);
-
-        if (!$workspace) {
-            return response()->json([
-                'message' => 'Workspace not found.',
-            ], 404);
+        if (!$project) {
+            return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($workspace->owner_id, $authUser->id)) {
-            return response()->json([
-                'message' => 'Only the workspace owner can remove members.',
-            ], 403);
+        if (!$this->permissionService->canManageMembers($project->id, $authUser->id)) {
+            return response()->json(['message' => 'Only the project owner or admin can remove members.'], 403);
         }
 
-        $member = WorkspaceMember::where('workspace_id', $workspace->id)
+        $member = WorkspaceMember::where('project_id', $project->id)
             ->where('id', $memberId)
             ->first();
 
         if (!$member) {
-            return response()->json([
-                'message' => 'Workspace member not found.',
-            ], 404);
+            return response()->json(['message' => 'Project member not found.'], 404);
         }
 
         $this->memberService->removeMember($member, $authUser->id);
 
-        return response()->json([
-            'message' => 'Workspace member removed successfully.',
-        ], 200);
+        return response()->json(['message' => 'Project member removed successfully.'], 200);
     }
 }

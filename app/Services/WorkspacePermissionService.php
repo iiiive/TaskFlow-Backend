@@ -6,43 +6,50 @@ use App\Models\WorkspaceMember;
 
 class WorkspacePermissionService
 {
-    public function getUserRole(int $workspaceId, int $userId): ?string
+    public function getUserRole(int $projectId, int $userId): ?string
     {
-        $member = WorkspaceMember::where('workspace_id', $workspaceId)
+        $member = WorkspaceMember::where('project_id', $projectId)
             ->where('user_id', $userId)
             ->first();
 
         return $member?->role;
     }
 
-    public function isMember(int $workspaceId, int $userId): bool
+    public function isMember(int $projectId, int $userId): bool
     {
-        return WorkspaceMember::where('workspace_id', $workspaceId)
+        return WorkspaceMember::where('project_id', $projectId)
             ->where('user_id', $userId)
             ->exists();
     }
 
-    public function canView(int $workspaceId, int $userId): bool
+    public function canView(int $projectId, int $userId): bool
     {
-        return $this->isMember($workspaceId, $userId);
+        return $this->isMember($projectId, $userId);
     }
 
-    public function canCreateOrUpdateTicket(int $workspaceId, int $userId): bool
+    public function canCreateOrUpdateTicket(int $projectId, int $userId): bool
     {
-        $role = $this->getUserRole($workspaceId, $userId);
+        $role = $this->getUserRole($projectId, $userId);
 
-        return in_array($role, ['owner', 'editor']);
+        return in_array($role, WorkspaceMember::ROLES_CAN_EDIT, true);
     }
 
-    public function canManageWorkspace(int $workspaceOwnerId, int $userId): bool
+    public function canDeleteTicket(int $projectId, int $userId): bool
     {
-        return $workspaceOwnerId === $userId;
+        $role = $this->getUserRole($projectId, $userId);
+
+        return in_array($role, WorkspaceMember::ROLES_CAN_DELETE, true);
     }
 
-    public function canDeleteTicket(int $workspaceId, int $userId): bool
+    public function canManageWorkspace(int $projectOwnerId, int $userId): bool
     {
-        $role = $this->getUserRole($workspaceId, $userId);
+        return $projectOwnerId === $userId;
+    }
 
-        return $role === 'owner';
+    public function canManageMembers(int $projectId, int $userId): bool
+    {
+        $role = $this->getUserRole($projectId, $userId);
+
+        return in_array($role, WorkspaceMember::ROLES_CAN_MANAGE_MEMBERS, true);
     }
 }
