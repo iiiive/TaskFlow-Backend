@@ -16,6 +16,7 @@ class WorkflowState extends Model
         'is_initial',
         'is_final',
         'requires_approval',
+        'required_fields',
     ];
 
     protected $casts = [
@@ -23,6 +24,7 @@ class WorkflowState extends Model
         'is_initial'        => 'boolean',
         'is_final'          => 'boolean',
         'requires_approval' => 'boolean',
+        'required_fields'   => 'array',
     ];
 
     public function template(): BelongsTo

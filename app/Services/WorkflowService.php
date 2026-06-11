@@ -36,7 +36,35 @@ class WorkflowService
             'is_initial'           => $data['is_initial'] ?? false,
             'is_final'             => $data['is_final'] ?? false,
             'requires_approval'    => $data['requires_approval'] ?? false,
+            'required_fields'      => $data['required_fields'] ?? null,
         ]);
+    }
+
+    /**
+     * Ensure the ticket has every field a target state requires populated.
+     * Throws InvalidArgumentException naming the first missing field.
+     */
+    private function assertRequiredFields(Ticket $ticket, ?WorkflowState $state): void
+    {
+        $required = $state?->required_fields ?? [];
+
+        if (empty($required)) {
+            return;
+        }
+
+        $labels = config('workflow.required_field_options', []);
+
+        foreach ($required as $field) {
+            $value = $ticket->getAttribute($field);
+            $missing = $value === null || $value === '' || (is_array($value) && count($value) === 0);
+
+            if ($missing) {
+                $label = $labels[$field] ?? $field;
+                throw new \InvalidArgumentException(
+                    "Cannot move to '{$state->name}': the field \"{$label}\" must be set first."
+                );
+            }
+        }
     }
 
     public function addTransition(WorkflowTemplate $workflow, int $fromStateId, int $toStateId, ?string $name = null): WorkflowTransition
@@ -90,6 +118,7 @@ class WorkflowService
                 throw new \InvalidArgumentException("Ticket must first enter the initial workflow state: {$initial->name}");
             }
 
+            $this->assertRequiredFields($ticket, WorkflowState::find($toStateId));
             $ticket->update(['workflow_state_id' => $toStateId]);
             return $ticket->fresh(['workflowState']);
         }
@@ -103,6 +132,8 @@ class WorkflowService
         }
 
         $toState = WorkflowState::find($toStateId);
+
+        $this->assertRequiredFields($ticket, $toState);
 
         if ($toState?->requires_approval) {
             // Notify project members who can approve

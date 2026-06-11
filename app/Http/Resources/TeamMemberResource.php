@@ -14,6 +14,7 @@ class TeamMemberResource extends JsonResource
             'team_id'   => $this->team_id,
             'user_id'   => $this->user_id,
             'role'      => $this->role,
+            'weekly_capacity_hours' => $this->weekly_capacity_hours,
             'joined_at' => $this->joined_at?->toISOString(),
             'user'      => new UserResource($this->whenLoaded('user')),
         ];

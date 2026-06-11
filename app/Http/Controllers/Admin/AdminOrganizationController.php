@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\UpdateOrganizationRequest;
 use App\Http\Resources\OrganizationResource;
 use App\Mail\OrganizationWelcomeMail;
 use App\Models\Organization;
 use App\Models\SubscriptionPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 
 class AdminOrganizationController extends Controller
 {
@@ -68,7 +70,7 @@ class AdminOrganizationController extends Controller
         ]);
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdateOrganizationRequest $request, $id)
     {
         $organization = Organization::find($id);
 
@@ -76,12 +78,17 @@ class AdminOrganizationController extends Controller
             return response()->json(['message' => 'Organization not found.'], 404);
         }
 
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'owner_email' => 'sometimes|required|email|max:255',
-            'subscription_plan_id' => 'sometimes|required|exists:subscription_plans,id',
-            'is_active' => 'sometimes|boolean',
-        ]);
+        $validated = $request->validated();
+
+        // Handle logo upload separately from scalar fields.
+        if ($request->hasFile('logo')) {
+            if ($organization->logo_path) {
+                Storage::disk('public')->delete($organization->logo_path);
+            }
+            $validated['logo_path'] = $request->file('logo')->store('org-logos', 'public');
+        }
+
+        unset($validated['logo']);
 
         $organization->update($validated);
         $organization->load('subscriptionPlan');
@@ -89,6 +96,45 @@ class AdminOrganizationController extends Controller
         return response()->json([
             'message' => 'Organization updated successfully.',
             'data' => new OrganizationResource($organization),
+        ]);
+    }
+
+    public function billing($id)
+    {
+        $organization = Organization::with('subscriptionPlan')
+            ->withCount(['users', 'projects'])
+            ->find($id);
+
+        if (!$organization) {
+            return response()->json(['message' => 'Organization not found.'], 404);
+        }
+
+        $plan = $organization->subscriptionPlan;
+        $storageLimit = $organization->storageLimitBytes();
+        $storageUsed = $organization->storageUsedBytes();
+
+        return response()->json([
+            'message' => 'Billing details retrieved successfully.',
+            'data' => [
+                'organization' => new OrganizationResource($organization),
+                'plan' => $plan ? new \App\Http\Resources\SubscriptionPlanResource($plan) : null,
+                'usage' => [
+                    'projects' => [
+                        'used'  => $organization->projects_count,
+                        'limit' => $plan?->max_projects,
+                    ],
+                    'members' => [
+                        'used'  => $organization->users_count,
+                        'limit' => $plan?->max_members,
+                    ],
+                    'storage' => [
+                        'used_bytes'  => $storageUsed,
+                        'limit_bytes' => $storageLimit,
+                        'used_gb'     => round($storageUsed / 1073741824, 2),
+                        'limit_gb'    => $plan?->storage_gb,
+                    ],
+                ],
+            ],
         ]);
     }
 

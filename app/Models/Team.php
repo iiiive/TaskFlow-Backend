@@ -16,6 +16,11 @@ class Team extends Model
         'name',
         'description',
         'color',
+        'capacity_hours',
+    ];
+
+    protected $casts = [
+        'capacity_hours' => 'integer',
     ];
 
     public function organization(): BelongsTo

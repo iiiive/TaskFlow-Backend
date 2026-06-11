@@ -37,6 +37,7 @@ class WorkspaceResource extends JsonResource
             'project_key' => $this->project_key,
             'project_type' => $this->project_type,
             'project_mode' => $this->project_mode,
+            'is_template' => (bool) $this->is_template,
             'archived_at' => $this->archived_at?->format('Y-m-d H:i:s'),
             'is_archived' => $this->isArchived(),
 

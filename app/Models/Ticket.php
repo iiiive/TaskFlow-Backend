@@ -12,7 +12,7 @@ class Ticket extends Model
     const ISSUE_TYPES = [
         'epic', 'story', 'task', 'subtask', 'bug',
         'improvement', 'change_request', 'incident',
-        'service_request', 'other',
+        'service_request', 'feature_request', 'other',
     ];
 
     protected $fillable = [

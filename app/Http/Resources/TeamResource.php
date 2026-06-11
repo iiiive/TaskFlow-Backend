@@ -17,6 +17,7 @@ class TeamResource extends JsonResource
             'name'            => $this->name,
             'description'     => $this->description,
             'color'           => $this->color,
+            'capacity_hours'  => $this->capacity_hours,
             'members_count'   => $this->whenCounted('teamMembers'),
             'members'         => TeamMemberResource::collection($this->whenLoaded('teamMembers')),
             'creator'         => new UserResource($this->whenLoaded('creator')),

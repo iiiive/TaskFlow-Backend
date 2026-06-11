@@ -81,6 +81,8 @@ class WorkflowController extends Controller
             'is_initial'        => 'nullable|boolean',
             'is_final'          => 'nullable|boolean',
             'requires_approval' => 'nullable|boolean',
+            'required_fields'   => 'nullable|array',
+            'required_fields.*' => 'string|in:' . implode(',', array_keys(config('workflow.required_field_options'))),
         ]);
 
         if (!empty($validated['is_initial'])) {
@@ -103,6 +105,8 @@ class WorkflowController extends Controller
             'is_initial'        => 'nullable|boolean',
             'is_final'          => 'nullable|boolean',
             'requires_approval' => 'nullable|boolean',
+            'required_fields'   => 'nullable|array',
+            'required_fields.*' => 'string|in:' . implode(',', array_keys(config('workflow.required_field_options'))),
         ]);
 
         if (!empty($validated['is_initial'])) {

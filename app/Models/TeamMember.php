@@ -13,10 +13,12 @@ class TeamMember extends Model
         'team_id',
         'user_id',
         'role',
+        'weekly_capacity_hours',
         'joined_at',
     ];
 
     protected $casts = [
+        'weekly_capacity_hours' => 'integer',
         'joined_at' => 'datetime',
     ];
 

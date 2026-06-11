@@ -15,6 +15,11 @@ class TicketAttachment extends Model
         'file_name',
         'file_path',
         'file_type',
+        'size_bytes',
+    ];
+
+    protected $casts = [
+        'size_bytes' => 'integer',
     ];
 
     public function ticket()

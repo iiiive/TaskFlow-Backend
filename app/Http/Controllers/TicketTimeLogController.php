@@ -37,7 +37,7 @@ class TicketTimeLogController extends Controller
             ], 404);
         }
 
-        if (!$this->permissionService->canView($ticket->workspace_id, $user->id)) {
+        if (!$this->permissionService->canView($ticket->project_id, $user->id)) {
             return response()->json([
                 'message' => 'You do not have access to this ticket.',
             ], 403);
@@ -81,7 +81,7 @@ class TicketTimeLogController extends Controller
         ]);
 
         $timeLog = TicketTimeLog::create([
-            'workspace_id' => $ticket->workspace_id,
+            'project_id' => $ticket->project_id,
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'hours' => $validated['hours'],
@@ -98,7 +98,7 @@ class TicketTimeLogController extends Controller
         }
 
         $activityLog = ActivityLog::create([
-            'workspace_id' => $ticket->workspace_id,
+            'project_id' => $ticket->project_id,
             'ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'action' => 'time_logged',
@@ -144,7 +144,7 @@ class TicketTimeLogController extends Controller
                 'user:id,name,email',
                 'ticket:id,title,status,priority',
             ])
-            ->where('workspace_id', $workspace->id);
+            ->where('project_id', $workspace->id);
 
         if (!empty($validated['date'])) {
             $query->whereDate('work_date', $validated['date']);
@@ -200,7 +200,7 @@ class TicketTimeLogController extends Controller
     private function canLogTime(Ticket $ticket, int $userId): bool
     {
         $canManageTicket = $this->permissionService->canCreateOrUpdateTicket(
-            $ticket->workspace_id,
+            $ticket->project_id,
             $userId
         );
 

@@ -21,6 +21,7 @@ class Workspace extends Model
         'project_key',
         'project_type',
         'project_mode',
+        'is_template',
         'last_issue_number',
         'archived_at',
     ];
@@ -28,6 +29,7 @@ class Workspace extends Model
     protected $casts = [
         'archived_at' => 'datetime',
         'last_issue_number' => 'integer',
+        'is_template' => 'boolean',
     ];
 
     public function organization()
@@ -92,6 +94,11 @@ class Workspace extends Model
     public function labels()
     {
         return $this->hasMany(Label::class, 'project_id');
+    }
+
+    public function workflowTemplates()
+    {
+        return $this->hasMany(WorkflowTemplate::class, 'project_id');
     }
 
     public function isArchived(): bool

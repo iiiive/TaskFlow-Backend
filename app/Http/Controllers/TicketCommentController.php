@@ -34,7 +34,7 @@ class TicketCommentController extends Controller
             ], 404);
         }
 
-        if (!$this->permissionService->canView($ticket->workspace_id, $user->id)) {
+        if (!$this->permissionService->canView($ticket->project_id, $user->id)) {
             return response()->json([
                 'message' => 'You do not have access to this ticket.',
             ], 403);
@@ -59,17 +59,17 @@ class TicketCommentController extends Controller
             ], 404);
         }
 
-        if (!$this->permissionService->canView($ticket->workspace_id, $user->id)) {
+        if (!$this->permissionService->canView($ticket->project_id, $user->id)) {
             return response()->json([
                 'message' => 'You do not have access to this ticket.',
             ], 403);
         }
 
-        $member = WorkspaceMember::where('workspace_id', $ticket->workspace_id)
+        $member = WorkspaceMember::where('project_id', $ticket->project_id)
             ->where('user_id', $user->id)
             ->first();
 
-        if (!$member || !in_array($member->role, ['owner', 'editor'])) {
+        if (!$member || !in_array($member->role, WorkspaceMember::ROLES_CAN_EDIT, true)) {
             return response()->json([
                 'message' => 'You do not have permission to comment on this ticket.',
             ], 403);

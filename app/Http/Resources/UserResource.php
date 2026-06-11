@@ -33,6 +33,9 @@ class UserResource extends JsonResource
 
             'avatar' => $this->avatar,
             'avatar_url' => $avatarUrl,
+            'timezone' => $this->timezone,
+            'preferences' => $this->preferences ?? [],
+            'is_super_admin' => (bool) $this->is_super_admin,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

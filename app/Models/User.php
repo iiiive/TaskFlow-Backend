@@ -22,6 +22,7 @@ class User extends Authenticatable
         'google_id',
         'avatar',
         'timezone',
+        'preferences',
         'email_verified_at',
 
         // 2FA fields
@@ -44,6 +45,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_super_admin' => 'boolean',
+            'preferences' => 'array',
 
             // 2FA casts
             'two_factor_enabled' => 'boolean',

@@ -16,6 +16,7 @@ class TicketAttachmentResource extends JsonResource
             'file_name' => $this->file_name,
             'file_path' => $this->file_path,
             'file_type' => $this->file_type,
+            'size_bytes' => $this->size_bytes,
 
             'file_url' => asset('storage/' . $this->file_path),
 

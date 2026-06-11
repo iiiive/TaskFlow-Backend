@@ -2,37 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreAttachmentRequest;
 use App\Http\Resources\TicketAttachmentResource;
 use App\Models\ActivityLog;
 use App\Models\Ticket;
 use App\Models\TicketAttachment;
-use App\Models\WorkspaceMember;
 use App\Services\WorkspaceEmailNotificationService;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 
 class TicketAttachmentController extends Controller
 {
-    protected WorkspaceEmailNotificationService $emailNotificationService;
-
-    public function __construct(WorkspaceEmailNotificationService $emailNotificationService)
-    {
-        $this->emailNotificationService = $emailNotificationService;
+    public function __construct(
+        protected WorkspaceEmailNotificationService $emailNotificationService
+    ) {
     }
 
-    public function index(Ticket $ticket)
+    public function index(Ticket $ticket): JsonResponse
     {
-        $user = auth()->user();
-
-        $member = WorkspaceMember::where('workspace_id', $ticket->workspace_id)
-            ->where('user_id', $user->id)
-            ->first();
-
-        if (!$member) {
-            return response()->json([
-                'message' => 'You are not a member of this workspace.',
-            ], 403);
-        }
+        $this->authorize('viewAny', [TicketAttachment::class, $ticket]);
 
         $attachments = TicketAttachment::with('user')
             ->where('ticket_id', $ticket->id)
@@ -45,58 +33,41 @@ class TicketAttachmentController extends Controller
         ]);
     }
 
-    public function store(Request $request, Ticket $ticket)
+    public function store(StoreAttachmentRequest $request, Ticket $ticket): JsonResponse
     {
-        $user = auth()->user();
+        $this->authorize('create', [TicketAttachment::class, $ticket]);
 
-        $member = WorkspaceMember::where('workspace_id', $ticket->workspace_id)
-            ->where('user_id', $user->id)
-            ->first();
+        $file = $request->file('file');
+        $size = $file->getSize();
 
-        if (!$member) {
-            return response()->json([
-                'message' => 'You are not a member of this workspace.',
-            ], 403);
+        // Enforce the organization's storage budget when a plan limit is set.
+        $organization = $ticket->workspace?->organization;
+        if ($organization) {
+            $limit = $organization->storageLimitBytes();
+            if ($limit !== null && ($organization->storageUsedBytes() + $size) > $limit) {
+                return response()->json([
+                    'message' => 'Storage limit reached for your organization. Remove files or upgrade your plan.',
+                ], 422);
+            }
         }
-
-        if (!in_array($member->role, ['owner', 'editor'])) {
-            return response()->json([
-                'message' => 'You do not have permission to upload attachments.',
-            ], 403);
-        }
-
-        $validated = $request->validate([
-            'file' => [
-                'required',
-                'file',
-                'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,rar',
-                'max:20480',
-            ],
-        ], [
-            'file.required' => 'Please select a file.',
-            'file.file' => 'The selected upload must be a valid file.',
-            'file.mimes' => 'Only images, documents, text files, compressed files, and office files are allowed.',
-            'file.max' => 'The file must not be larger than 20MB.',
-        ]);
-
-        $file = $validated['file'];
 
         $path = $file->store('ticket-attachments', 'public');
 
         $attachment = TicketAttachment::create([
             'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
+            'user_id'   => $request->user()->id,
             'file_name' => $file->getClientOriginalName(),
             'file_path' => $path,
             'file_type' => $file->getClientMimeType(),
+            'size_bytes' => $size,
         ]);
 
         $activityLog = ActivityLog::create([
-            'workspace_id' => $ticket->workspace_id,
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'action' => 'attachment_uploaded',
-            'description' => $user->name . ' uploaded attachment "' . $file->getClientOriginalName() . '" to ticket "' . $ticket->title . '".',
+            'project_id' => $ticket->project_id,
+            'ticket_id'  => $ticket->id,
+            'user_id'    => $request->user()->id,
+            'action'     => 'attachment_uploaded',
+            'description' => $request->user()->name . ' uploaded attachment "' . $file->getClientOriginalName() . '" to ticket "' . $ticket->title . '".',
         ]);
 
         $this->emailNotificationService->sendActivityNotification($activityLog);
@@ -109,28 +80,11 @@ class TicketAttachmentController extends Controller
         ], 201);
     }
 
-    public function destroy(TicketAttachment $attachment)
+    public function destroy(TicketAttachment $attachment): JsonResponse
     {
-        $user = auth()->user();
+        $this->authorize('delete', $attachment);
 
         $ticket = $attachment->ticket;
-
-        $member = WorkspaceMember::where('workspace_id', $ticket->workspace_id)
-            ->where('user_id', $user->id)
-            ->first();
-
-        if (!$member) {
-            return response()->json([
-                'message' => 'You are not a member of this workspace.',
-            ], 403);
-        }
-
-        if (!in_array($member->role, ['owner', 'editor'])) {
-            return response()->json([
-                'message' => 'You do not have permission to delete attachments.',
-            ], 403);
-        }
-
         $fileName = $attachment->file_name;
 
         if ($attachment->file_path && Storage::disk('public')->exists($attachment->file_path)) {
@@ -138,11 +92,11 @@ class TicketAttachmentController extends Controller
         }
 
         $activityLog = ActivityLog::create([
-            'workspace_id' => $ticket->workspace_id,
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'action' => 'attachment_deleted',
-            'description' => $user->name . ' deleted attachment "' . $fileName . '" from ticket "' . $ticket->title . '".',
+            'project_id' => $ticket->project_id,
+            'ticket_id'  => $ticket->id,
+            'user_id'    => auth()->id(),
+            'action'     => 'attachment_deleted',
+            'description' => auth()->user()->name . ' deleted attachment "' . $fileName . '" from ticket "' . $ticket->title . '".',
         ]);
 
         $this->emailNotificationService->sendActivityNotification($activityLog);

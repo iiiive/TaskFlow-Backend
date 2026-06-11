@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Enable Sanctum SPA (cookie/session) authentication for first-party
+        // requests from stateful domains; bearer tokens still work otherwise.
+        $middleware->statefulApi();
+
         $middleware->append(SecurityHeadersMiddleware::class);
         $middleware->alias([
             'super.admin' => \App\Http\Middleware\SuperAdminMiddleware::class,

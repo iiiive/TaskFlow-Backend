@@ -18,6 +18,7 @@ class WorkflowStateResource extends JsonResource
             'is_initial'           => $this->is_initial,
             'is_final'             => $this->is_final,
             'requires_approval'    => $this->requires_approval,
+            'required_fields'      => $this->required_fields ?? [],
             'created_at'           => $this->created_at?->toISOString(),
         ];
     }

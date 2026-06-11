@@ -14,6 +14,9 @@ class Organization extends Model
         'name',
         'slug',
         'owner_email',
+        'logo_path',
+        'primary_color',
+        'custom_domain',
         'subscription_plan_id',
         'is_active',
         'onboarded_at',
@@ -80,5 +83,24 @@ class Organization extends Model
             return 0;
         }
         return (int) round(($this->users()->count() / $max) * 100);
+    }
+
+    /**
+     * Total storage limit for this organization, in bytes (null = unlimited).
+     */
+    public function storageLimitBytes(): ?int
+    {
+        $gb = $this->subscriptionPlan?->storage_gb;
+        return $gb !== null ? (int) $gb * 1024 * 1024 * 1024 : null;
+    }
+
+    /**
+     * Bytes currently consumed by ticket attachments across this org's projects.
+     */
+    public function storageUsedBytes(): int
+    {
+        return (int) TicketAttachment::query()
+            ->whereHas('ticket.workspace', fn ($q) => $q->where('organization_id', $this->id))
+            ->sum('size_bytes');
     }
 }

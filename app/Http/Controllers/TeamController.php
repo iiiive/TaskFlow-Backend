@@ -39,6 +39,7 @@ class TeamController extends Controller
             'name'            => 'required|string|max:100',
             'description'     => 'nullable|string|max:500',
             'color'           => 'nullable|string|max:20',
+            'capacity_hours'  => 'nullable|integer|min:0|max:10000',
             'project_id'      => 'nullable|integer|exists:projects,id',
             'organization_id' => 'nullable|integer|exists:organizations,id',
         ]);
@@ -59,15 +60,39 @@ class TeamController extends Controller
     public function update(Request $request, Team $team): JsonResponse
     {
         $validated = $request->validate([
-            'name'        => 'sometimes|required|string|max:100',
-            'description' => 'nullable|string|max:500',
-            'color'       => 'nullable|string|max:20',
-            'project_id'  => 'nullable|integer|exists:projects,id',
+            'name'           => 'sometimes|required|string|max:100',
+            'description'    => 'nullable|string|max:500',
+            'color'          => 'nullable|string|max:20',
+            'capacity_hours' => 'nullable|integer|min:0|max:10000',
+            'project_id'     => 'nullable|integer|exists:projects,id',
         ]);
 
         $team = $this->teamService->updateTeam($team, $validated);
 
         return response()->json(['data' => new TeamResource($team)]);
+    }
+
+    public function workload(Request $request, Team $team): JsonResponse
+    {
+        abort_unless(
+            $team->teamMembers()->where('user_id', $request->user()->id)->exists()
+                || $team->created_by === $request->user()->id,
+            403,
+            'You do not have access to this team.'
+        );
+
+        $validated = $request->validate([
+            'from' => 'nullable|date',
+            'to'   => 'nullable|date|after_or_equal:from',
+        ]);
+
+        return response()->json([
+            'data' => $this->teamService->workload(
+                $team,
+                $validated['from'] ?? null,
+                $validated['to'] ?? null
+            ),
+        ]);
     }
 
     public function destroy(Team $team): JsonResponse
@@ -82,6 +107,7 @@ class TeamController extends Controller
         $validated = $request->validate([
             'email' => 'required|email|exists:users,email',
             'role'  => 'nullable|string|in:team_lead,member',
+            'weekly_capacity_hours' => 'nullable|integer|min:0|max:168',
         ]);
 
         $user = User::where('email', $validated['email'])->first();
@@ -90,7 +116,12 @@ class TeamController extends Controller
             return response()->json(['message' => 'User is already a team member.'], 422);
         }
 
-        $member = $this->teamService->addMember($team, $user->id, $validated['role'] ?? 'member');
+        $member = $this->teamService->addMember(
+            $team,
+            $user->id,
+            $validated['role'] ?? 'member',
+            $validated['weekly_capacity_hours'] ?? null
+        );
 
         return response()->json(['data' => new TeamMemberResource($member)], 201);
     }
@@ -101,9 +132,14 @@ class TeamController extends Controller
 
         $validated = $request->validate([
             'role' => 'required|string|in:team_lead,member',
+            'weekly_capacity_hours' => 'nullable|integer|min:0|max:168',
         ]);
 
-        $member = $this->teamService->updateMemberRole($member, $validated['role']);
+        $member = $this->teamService->updateMemberRole(
+            $member,
+            $validated['role'],
+            array_key_exists('weekly_capacity_hours', $validated) ? $validated['weekly_capacity_hours'] : null
+        );
 
         return response()->json(['data' => new TeamMemberResource($member)]);
     }

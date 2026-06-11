@@ -31,7 +31,7 @@ class TicketCommentService
         ]);
 
         $this->activityLogService->create(
-            $ticket->workspace_id,
+            $ticket->project_id,
             $ticket->id,
             $userId,
             'comment_added',

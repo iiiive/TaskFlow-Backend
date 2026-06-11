@@ -26,3 +26,8 @@ Schedule::call(function () {
             }
         });
 })->dailyAt('08:00')->name('sprint-ending-reminders');
+
+Schedule::command('planora:send-due-date-reminders')
+    ->dailyAt('07:00')
+    ->name('due-date-reminders')
+    ->withoutOverlapping();

@@ -11,7 +11,7 @@ class EpicResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'workspace_id' => $this->workspace_id,
+            'workspace_id' => $this->project_id,
             'created_by' => $this->created_by,
 
             'name' => $this->name,

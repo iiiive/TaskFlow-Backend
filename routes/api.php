@@ -18,7 +18,24 @@ use App\Http\Controllers\SprintController;
 use App\Http\Controllers\WorkflowController;
 use App\Http\Controllers\Admin\AdminOrganizationController;
 use App\Http\Controllers\Admin\AdminSubscriptionPlanController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Middleware\SuperAdminMiddleware;
+
+/*
+|--------------------------------------------------------------------------
+| Google OAuth (unversioned)
+|--------------------------------------------------------------------------
+| These are browser/redirect endpoints, not versioned SPA API calls. They
+| live at /api/auth/google/* to match GOOGLE_REDIRECT_URI and the Google
+| Cloud Console authorized redirect URI. They use the `web` middleware so the
+| callback can establish a real session cookie via Auth::login (the redirect
+| from Google is a top-level navigation, not a stateful SPA XHR).
+*/
+Route::middleware('web')->group(function () {
+    Route::get('/auth/google/redirect', [AuthController::class, 'redirectToGoogle']);
+    Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
+});
 
 Route::prefix('v1')->group(function () {
 
@@ -31,20 +48,12 @@ Route::prefix('v1')->group(function () {
     Route::middleware('throttle:10,1')->group(function () {
         Route::post('/store', [AuthController::class, 'store']);
         Route::post('/register', [AuthController::class, 'store']);
-        Route::post('/login', [AuthController::class, 'login']);
+        // Stricter brute-force limiter on credential submission (email + IP).
+        Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
         Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
         Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-        Route::post('/login/2fa', [AuthController::class, 'verifyTwoFactorLogin']);
+        Route::post('/login/2fa', [AuthController::class, 'verifyTwoFactorLogin'])->middleware('throttle:login');
     });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Google Auth Routes
-    |--------------------------------------------------------------------------
-    */
-
-    Route::get('/auth/google/redirect', [AuthController::class, 'redirectToGoogle']);
-    Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
 
     /*
     |--------------------------------------------------------------------------
@@ -52,7 +61,7 @@ Route::prefix('v1')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
         Route::get('/profile', [AuthController::class, 'getProfile']);
         Route::put('/profile', [AuthController::class, 'updateProfile']);
@@ -80,6 +89,7 @@ Route::prefix('v1')->group(function () {
         */
 
         Route::middleware(SuperAdminMiddleware::class)->prefix('admin')->group(function () {
+            Route::get('organizations/{id}/billing', [AdminOrganizationController::class, 'billing']);
             Route::apiResource('organizations', AdminOrganizationController::class);
             Route::apiResource('subscription-plans', AdminSubscriptionPlanController::class);
         });
@@ -92,9 +102,14 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/projects', [WorkspaceController::class, 'index']);
         Route::post('/projects', [WorkspaceController::class, 'store']);
+        // Static segments must be declared before the {id} wildcard.
+        Route::get('/projects/templates', [WorkspaceController::class, 'templates']);
+        Route::post('/projects/from-template/{templateId}', [WorkspaceController::class, 'createFromTemplate']);
         Route::get('/projects/{id}', [WorkspaceController::class, 'show']);
         Route::put('/projects/{id}', [WorkspaceController::class, 'update']);
         Route::delete('/projects/{id}', [WorkspaceController::class, 'destroy']);
+        Route::post('/projects/{id}/clone', [WorkspaceController::class, 'clone']);
+        Route::post('/projects/{id}/save-as-template', [WorkspaceController::class, 'saveAsTemplate']);
         Route::post('/projects/{id}/archive', [WorkspaceController::class, 'archive']);
         Route::post('/projects/{id}/unarchive', [WorkspaceController::class, 'unarchive']);
 
@@ -214,6 +229,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/teams', [TeamController::class, 'index']);
         Route::post('/teams', [TeamController::class, 'store']);
         Route::get('/teams/{team}', [TeamController::class, 'show']);
+        Route::get('/teams/{team}/workload', [TeamController::class, 'workload']);
         Route::put('/teams/{team}', [TeamController::class, 'update']);
         Route::delete('/teams/{team}', [TeamController::class, 'destroy']);
         Route::post('/teams/{team}/members', [TeamController::class, 'addMember']);
@@ -251,6 +267,38 @@ Route::prefix('v1')->group(function () {
         Route::post('/workflows/{workflow}/transitions', [WorkflowController::class, 'addTransition']);
         Route::delete('/workflows/{workflow}/transitions/{transition}', [WorkflowController::class, 'removeTransition']);
         Route::post('/workflows/{workflow}/activate', [WorkflowController::class, 'activate']);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Reports
+        |--------------------------------------------------------------------------
+        */
+
+        Route::prefix('reports/projects/{projectId}')->group(function () {
+            Route::get('/burndown',        [ReportController::class, 'burndown']);
+            Route::get('/velocity',        [ReportController::class, 'velocity']);
+            Route::get('/sla',             [ReportController::class, 'sla']);
+            Route::get('/resolution-time', [ReportController::class, 'resolutionTime']);
+            Route::get('/workload',        [ReportController::class, 'workload']);
+            Route::get('/distribution',    [ReportController::class, 'distribution']);
+            Route::get('/overdue',         [ReportController::class, 'overdue']);
+            Route::get('/progress',        [ReportController::class, 'progress']);
+            Route::get('/response-time',   [ReportController::class, 'responseTime']);
+            Route::get('/agent-performance', [ReportController::class, 'agentPerformance']);
+            Route::get('/summary',         [ReportController::class, 'summary']);
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Notifications
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('/notifications',              [NotificationController::class, 'index']);
+        Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::post('/notifications/{id}/read',   [NotificationController::class, 'markAsRead']);
+        Route::post('/notifications/read-all',    [NotificationController::class, 'markAllAsRead']);
+        Route::delete('/notifications/{id}',      [NotificationController::class, 'destroy']);
 
     });
 

@@ -14,6 +14,10 @@ class OrganizationResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'owner_email' => $this->owner_email,
+            'logo_path' => $this->logo_path,
+            'logo_url' => $this->logo_path ? url('storage/' . $this->logo_path) : null,
+            'primary_color' => $this->primary_color,
+            'custom_domain' => $this->custom_domain,
             'is_active' => $this->is_active,
             'onboarded_at' => $this->onboarded_at?->format('Y-m-d H:i:s'),
 

@@ -11,7 +11,7 @@ class WorkspaceMemberResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'workspace_id' => $this->workspace_id,
+            'workspace_id' => $this->project_id,
             'user_id' => $this->user_id,
 
             /*
@@ -30,10 +30,17 @@ class WorkspaceMemberResource extends JsonResource
             | Use this in Angular so we do not need to change the database values.
             */
             'role_label' => match ($this->role) {
-                'owner' => 'Project Manager',
-                'editor' => 'User',
+                'owner' => 'Owner',
+                'admin' => 'Admin',
+                'project_manager' => 'Project Manager',
+                'team_lead' => 'Team Lead',
+                'developer' => 'Developer',
+                'tester' => 'Tester',
                 'viewer' => 'Viewer / Read Only',
-                default => ucfirst($this->role),
+                'client' => 'Client',
+                // Legacy value retained for any pre-migration rows.
+                'editor' => 'User',
+                default => ucfirst(str_replace('_', ' ', (string) $this->role)),
             },
 
             'user' => new UserResource($this->whenLoaded('user')),

@@ -10,6 +10,7 @@ use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -101,13 +102,14 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // Establish a first-party session (httpOnly cookie) instead of a bearer token.
+        Auth::login($user, $request->boolean('remember'));
+        $request->session()->regenerate();
 
         return response()->json([
             'message' => 'Login successful!',
             'requires_2fa' => false,
             'user' => new UserResource($user),
-            'token' => $token,
         ]);
     }
 
@@ -157,12 +159,13 @@ class AuthController extends Controller
             ->where('user_id', $user->id)
             ->delete();
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // 2FA passed — establish the first-party session.
+        Auth::login($user);
+        $request->session()->regenerate();
 
         return response()->json([
             'message' => 'Login successful!',
             'user' => new UserResource($user),
-            'token' => $token,
         ]);
     }
 
@@ -510,7 +513,7 @@ class AuthController extends Controller
             ->redirect();
     }
 
-    public function handleGoogleCallback()
+    public function handleGoogleCallback(Request $request)
     {
         try {
             $googleUser = Socialite::driver('google')
@@ -555,13 +558,15 @@ class AuthController extends Controller
                 );
             }
 
-            $token = $user->createToken('google_auth_token')->plainTextToken;
+            // Establish the first-party session cookie (no token in the URL).
+            Auth::login($user);
+            if ($request->hasSession()) {
+                $request->session()->regenerate();
+            }
 
             $frontendUrl = config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:4200'));
 
-            return redirect()->away(
-                $frontendUrl . '/login?google_token=' . urlencode($token)
-            );
+            return redirect()->away($frontendUrl . '/dashboard');
         } catch (\Throwable $e) {
             Log::error('Google login failed', [
                 'message' => $e->getMessage(),
@@ -600,12 +605,28 @@ class AuthController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')->ignore($user->id),
             ],
+            'timezone' => ['nullable', 'string', Rule::in(timezone_identifiers_list())],
+            'preferences' => 'nullable|array',
+            'preferences.theme' => 'nullable|string|in:light,dark,system',
+            'preferences.email_notifications' => 'nullable|boolean',
+            'preferences.default_board_view' => 'nullable|string|in:board,backlog',
         ]);
 
-        $user->update([
+        $payload = [
             'name' => $validated['name'],
             'email' => $validated['email'],
-        ]);
+        ];
+
+        if (array_key_exists('timezone', $validated)) {
+            $payload['timezone'] = $validated['timezone'];
+        }
+
+        if (array_key_exists('preferences', $validated)) {
+            // Merge so partial updates don't wipe other preference keys.
+            $payload['preferences'] = array_merge($user->preferences ?? [], $validated['preferences'] ?? []);
+        }
+
+        $user->update($payload);
 
         return response()->json([
             'message' => 'Profile updated successfully.',
@@ -656,7 +677,19 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()?->delete();
+        // Revoke a bearer token if one was used; otherwise tear down the session.
+        $token = $request->user()?->currentAccessToken();
+
+        if ($token && method_exists($token, 'delete')) {
+            $token->delete();
+        }
+
+        Auth::guard('web')->logout();
+
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json([
             'message' => 'Logged out successfully.',
