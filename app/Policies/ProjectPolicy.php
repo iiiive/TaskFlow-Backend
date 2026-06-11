@@ -34,7 +34,9 @@ class ProjectPolicy
 
     public function delete(User $user, Workspace $project): bool
     {
-        return $project->owner_id === $user->id;
+        $role = $this->getRole($user, $project);
+
+        return in_array($role, WorkspaceMember::ROLES_CAN_MANAGE_PROJECT, true);
     }
 
     public function archive(User $user, Workspace $project): bool

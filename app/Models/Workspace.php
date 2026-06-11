@@ -101,6 +101,15 @@ class Workspace extends Model
         return $this->hasMany(WorkflowTemplate::class, 'project_id');
     }
 
+    /**
+     * A project has at most one assigned team (one-team-per-project model).
+     * Members added to the project are auto-synced into this team.
+     */
+    public function team()
+    {
+        return $this->hasOne(Team::class, 'project_id');
+    }
+
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
@@ -122,50 +131,22 @@ class Workspace extends Model
         return $key . '-' . $number;
     }
 
+    /**
+     * Seed the board's default columns. These are only defaults — users can add,
+     * rename, delete and drag-reorder columns afterward (see KanbanColumnController).
+     *
+     * The backlog lives on its own page (lists all project tickets), so the first
+     * board column is "To Do", not "Backlog", and no column is flagged as the backlog.
+     */
     public function createDefaultKanbanColumns(): void
     {
         if ($this->kanbanColumns()->exists()) {
             return;
         }
 
-        $columns = [
-            [
-                'name' => 'Backlog',
-                'status_key' => 'todo',
-                'is_backlog_column' => true,
-                'is_done_column' => false,
-            ],
-            [
-                'name' => 'Ready for Development',
-                'status_key' => 'ready_for_development',
-                'is_backlog_column' => false,
-                'is_done_column' => false,
-            ],
-            [
-                'name' => 'Dev In Progress',
-                'status_key' => 'dev_in_progress',
-                'is_backlog_column' => false,
-                'is_done_column' => false,
-            ],
-            [
-                'name' => 'Ready for Testing',
-                'status_key' => 'ready_for_testing',
-                'is_backlog_column' => false,
-                'is_done_column' => false,
-            ],
-            [
-                'name' => 'Ready for UAT',
-                'status_key' => 'ready_for_uat',
-                'is_backlog_column' => false,
-                'is_done_column' => false,
-            ],
-            [
-                'name' => 'Done',
-                'status_key' => 'done',
-                'is_backlog_column' => false,
-                'is_done_column' => true,
-            ],
-        ];
+        $columns = $this->project_mode === 'scrum'
+            ? $this->defaultScrumColumns()
+            : $this->defaultKanbanColumns();
 
         foreach ($columns as $index => $column) {
             $this->kanbanColumns()->create([
@@ -173,9 +154,36 @@ class Workspace extends Model
                 'slug' => Str::slug($column['name']),
                 'position' => $index + 1,
                 'status_key' => $column['status_key'],
-                'is_backlog_column' => $column['is_backlog_column'],
+                'is_backlog_column' => false,
                 'is_done_column' => $column['is_done_column'],
             ]);
         }
+    }
+
+    /**
+     * Kanban default: To Do / Working / Done.
+     */
+    private function defaultKanbanColumns(): array
+    {
+        return [
+            ['name' => 'To Do', 'status_key' => 'todo', 'is_done_column' => false],
+            ['name' => 'Working', 'status_key' => 'dev_in_progress', 'is_done_column' => false],
+            ['name' => 'Done', 'status_key' => 'done', 'is_done_column' => true],
+        ];
+    }
+
+    /**
+     * Scrum default: the detailed dev flow, but starting at To Do (no Backlog column).
+     */
+    private function defaultScrumColumns(): array
+    {
+        return [
+            ['name' => 'To Do', 'status_key' => 'todo', 'is_done_column' => false],
+            ['name' => 'Ready for Development', 'status_key' => 'ready_for_development', 'is_done_column' => false],
+            ['name' => 'Dev In Progress', 'status_key' => 'dev_in_progress', 'is_done_column' => false],
+            ['name' => 'Ready for Testing', 'status_key' => 'ready_for_testing', 'is_done_column' => false],
+            ['name' => 'Ready for UAT', 'status_key' => 'ready_for_uat', 'is_done_column' => false],
+            ['name' => 'Done', 'status_key' => 'done', 'is_done_column' => true],
+        ];
     }
 }

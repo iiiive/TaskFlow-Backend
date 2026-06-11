@@ -41,9 +41,15 @@ class WorkspacePermissionService
         return in_array($role, WorkspaceMember::ROLES_CAN_DELETE, true);
     }
 
-    public function canManageWorkspace(int $projectOwnerId, int $userId): bool
+    /**
+     * Project-level management (rename/settings/delete/archive/clone). Role-based:
+     * project_manager and team_lead can manage the project.
+     */
+    public function canManageWorkspace(int $projectId, int $userId): bool
     {
-        return $projectOwnerId === $userId;
+        $role = $this->getUserRole($projectId, $userId);
+
+        return in_array($role, WorkspaceMember::ROLES_CAN_MANAGE_PROJECT, true);
     }
 
     public function canManageMembers(int $projectId, int $userId): bool

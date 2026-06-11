@@ -14,17 +14,22 @@ class Organization extends Model
         'name',
         'slug',
         'owner_email',
+        'owner_id',
         'logo_path',
         'primary_color',
         'custom_domain',
         'subscription_plan_id',
         'is_active',
         'onboarded_at',
+        'subscription_starts_at',
+        'subscription_ends_at',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'onboarded_at' => 'datetime',
+        'subscription_starts_at' => 'datetime',
+        'subscription_ends_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -54,9 +59,32 @@ class Organization extends Model
         return $this->belongsTo(SubscriptionPlan::class);
     }
 
+    public function owner()
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
+
     public function users()
     {
         return $this->hasMany(User::class);
+    }
+
+    /**
+     * True when the subscription window has a hard end date that is now in the past.
+     * A null subscription_ends_at means a perpetual plan (never expires).
+     */
+    public function isSubscriptionExpired(): bool
+    {
+        return $this->subscription_ends_at !== null
+            && $this->subscription_ends_at->isPast();
+    }
+
+    /**
+     * Org accounts may log in only when the org is active AND not expired.
+     */
+    public function canMembersLogin(): bool
+    {
+        return $this->is_active && !$this->isSubscriptionExpired();
     }
 
     public function projects()

@@ -423,13 +423,13 @@ class TicketController extends Controller
 
         $ticketTitle = $ticket->title;
         $projectId = $ticket->project_id;
-        $ticketIdForLog = $ticket->id;
 
         $this->ticketService->deleteTicket($ticket);
 
+        // The ticket no longer exists, so the activity log must not FK-reference it.
         $this->createAndSendActivity(
             $projectId,
-            $ticketIdForLog,
+            null,
             $user->id,
             'ticket_deleted',
             $user->name . ' deleted ticket "' . $ticketTitle . '".'

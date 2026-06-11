@@ -5,18 +5,21 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateOrganizationRequest;
 use App\Http\Resources\OrganizationResource;
-use App\Mail\OrganizationWelcomeMail;
 use App\Models\Organization;
-use App\Models\SubscriptionPlan;
+use App\Services\OrganizationProvisioningService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class AdminOrganizationController extends Controller
 {
+    public function __construct(
+        private OrganizationProvisioningService $provisioning
+    ) {}
+
     public function index()
     {
-        $organizations = Organization::with('subscriptionPlan')
+        $organizations = Organization::with(['subscriptionPlan', 'owner'])
             ->withCount('users')
             ->latest()
             ->paginate(20);
@@ -37,26 +40,46 @@ class AdminOrganizationController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'owner_email' => 'required|email|max:255',
+            'owner_name' => 'required|string|max:80',
+            // The owner email becomes the org admin's login, so it must be a
+            // brand-new user account.
+            'owner_email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'subscription_plan_id' => 'required|exists:subscription_plans,id',
+        ], [
+            'owner_email.unique' => 'A user with this email already exists.',
         ]);
 
-        $organization = Organization::create($validated);
-        $organization->load('subscriptionPlan');
-
-        Mail::to($organization->owner_email)->queue(
-            new OrganizationWelcomeMail($organization)
-        );
+        $organization = $this->provisioning->provision($validated);
 
         return response()->json([
-            'message' => 'Organization created successfully. Welcome email sent.',
+            'message' => 'Organization created. Admin account provisioned and credentials emailed.',
             'data' => new OrganizationResource($organization),
         ], 201);
     }
 
+    public function renew(Request $request, $id)
+    {
+        $organization = Organization::find($id);
+
+        if (!$organization) {
+            return response()->json(['message' => 'Organization not found.'], 404);
+        }
+
+        $validated = $request->validate([
+            'ends_at' => 'nullable|date|after:today',
+        ]);
+
+        $organization = $this->provisioning->renew($organization, $validated['ends_at'] ?? null);
+
+        return response()->json([
+            'message' => 'Subscription renewed successfully.',
+            'data' => new OrganizationResource($organization),
+        ]);
+    }
+
     public function show($id)
     {
-        $organization = Organization::with(['subscriptionPlan', 'users'])
+        $organization = Organization::with(['subscriptionPlan', 'users', 'owner'])
             ->withCount('users')
             ->find($id);
 

@@ -10,12 +10,10 @@ use Illuminate\Validation\ValidationException;
 
 class WorkspaceMemberService
 {
-    protected ActivityLogService $activityLogService;
-
-    public function __construct(ActivityLogService $activityLogService)
-    {
-        $this->activityLogService = $activityLogService;
-    }
+    public function __construct(
+        protected ActivityLogService $activityLogService,
+        protected ProjectTeamSyncService $teamSync
+    ) {}
 
     public function getMembers(Workspace $workspace): Collection
     {
@@ -49,6 +47,9 @@ class WorkspaceMemberService
             'user_id' => $userToAdd->id,
             'role' => $data['role'],
         ]);
+
+        // One-team-per-project: a new project member auto-joins the project's team.
+        $this->teamSync->syncUser($workspace, $userToAdd->id);
 
         $this->activityLogService->create(
             $workspace->id,

@@ -15,12 +15,10 @@ use Illuminate\Support\Facades\DB;
 
 class WorkspaceService
 {
-    protected ActivityLogService $activityLogService;
-
-    public function __construct(ActivityLogService $activityLogService)
-    {
-        $this->activityLogService = $activityLogService;
-    }
+    public function __construct(
+        protected ActivityLogService $activityLogService,
+        protected ProjectTeamSyncService $teamSync
+    ) {}
 
     public function getUserWorkspaces(User $user): Collection
     {
@@ -36,39 +34,97 @@ class WorkspaceService
             ->get();
     }
 
+    /**
+     * Create a project. Supports two flows:
+     *  - self-serve: the creator becomes the project_manager member.
+     *  - org-admin: pass `members` (list of {user_id, role}) and an optional
+     *    `team_id`; the creator is recorded as owner_id (created-by) but is not
+     *    auto-added as a member.
+     *
+     * @param array{
+     *   name:string, description?:?string, project_key?:?string,
+     *   project_type?:?string, project_mode?:?string,
+     *   organization_id?:?int, members?:array<int,array{user_id:int,role:string}>, team_id?:?int
+     * } $data
+     */
     public function createWorkspace(User $user, array $data): Workspace
     {
-        $workspace = Workspace::create([
-            'owner_id' => $user->id,
-            'organization_id' => $user->organization_id,
-            'name' => $data['name'],
-            'description' => $data['description'] ?? null,
-            'project_key' => $data['project_key'] ?? null,
-            'project_type' => $data['project_type'] ?? 'software',
-            'project_mode' => $data['project_mode'] ?? 'kanban',
-        ]);
+        return DB::transaction(function () use ($user, $data) {
+            $workspace = Workspace::create([
+                'owner_id' => $user->id,
+                'organization_id' => $data['organization_id'] ?? $user->organization_id,
+                'name' => $data['name'],
+                'description' => $data['description'] ?? null,
+                'project_key' => $data['project_key'] ?? null,
+                'project_type' => $data['project_type'] ?? 'software',
+                'project_mode' => $data['project_mode'] ?? 'kanban',
+            ]);
 
-        WorkspaceMember::create([
-            'project_id' => $workspace->id,
-            'user_id' => $user->id,
-            'role' => 'owner',
-        ]);
+            // Assign the team first so member sync lands them in the team too.
+            if (!empty($data['team_id'])) {
+                $this->assignTeam($workspace, (int) $data['team_id']);
+            }
 
-        $workspace->createDefaultKanbanColumns();
+            if (!empty($data['members'])) {
+                foreach ($data['members'] as $member) {
+                    WorkspaceMember::create([
+                        'project_id' => $workspace->id,
+                        'user_id' => $member['user_id'],
+                        'role' => $member['role'],
+                    ]);
+                    $this->teamSync->syncUser($workspace, (int) $member['user_id']);
+                }
+            } else {
+                // Self-serve: the creator leads their own project.
+                WorkspaceMember::create([
+                    'project_id' => $workspace->id,
+                    'user_id' => $user->id,
+                    'role' => 'project_manager',
+                ]);
+                $this->teamSync->syncUser($workspace, $user->id);
+            }
 
-        $this->activityLogService->create(
-            $workspace->id,
-            null,
-            $user->id,
-            'project_created',
-            'Project "' . $workspace->name . '" was created.'
-        );
+            $workspace->createDefaultKanbanColumns();
 
-        return $workspace->load([
-            'owner:id,name,email',
-            'workspaceMembers.user:id,name,email',
-            'kanbanColumns',
-        ]);
+            $this->activityLogService->create(
+                $workspace->id,
+                null,
+                $user->id,
+                'project_created',
+                'Project "' . $workspace->name . '" was created.'
+            );
+
+            return $workspace->load([
+                'owner:id,name,email',
+                'workspaceMembers.user:id,name,email',
+                'kanbanColumns',
+            ]);
+        });
+    }
+
+    /**
+     * Assign a single team to a project (one-team-per-project) and backfill the
+     * project's current members into that team.
+     */
+    public function assignTeam(Workspace $workspace, int $teamId): void
+    {
+        $team = \App\Models\Team::where('id', $teamId)
+            ->where('organization_id', $workspace->organization_id)
+            ->first();
+
+        if (!$team) {
+            return;
+        }
+
+        // Detach any team currently bound to this project, then bind the new one.
+        \App\Models\Team::where('project_id', $workspace->id)
+            ->where('id', '!=', $team->id)
+            ->update(['project_id' => null]);
+
+        $team->update(['project_id' => $workspace->id]);
+
+        $workspace->setRelation('team', $team);
+        $this->teamSync->backfill($workspace);
     }
 
     public function updateWorkspace(Workspace $workspace, array $data, int $userId): Workspace
@@ -118,8 +174,8 @@ class WorkspaceService
                 'name'            => $options['name'] ?? ($source->name . ' (Copy)'),
                 'description'     => $source->description,
                 'project_key'    => null,
-                'project_type'    => $source->project_type,
-                'project_mode'    => $source->project_mode,
+                'project_type'    => $source->project_type ?? 'software',
+                'project_mode'    => $source->project_mode ?? 'kanban',
                 'is_template'     => $options['as_template'] ?? false,
                 'last_issue_number' => 0,
                 'archived_at'     => null,
@@ -128,7 +184,7 @@ class WorkspaceService
             WorkspaceMember::create([
                 'project_id' => $clone->id,
                 'user_id'    => $user->id,
-                'role'       => 'owner',
+                'role'       => 'project_manager',
             ]);
 
             // Copy Kanban columns; keep a map old->new for ticket placement.

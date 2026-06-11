@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SecurityHeadersMiddleware::class);
         $middleware->alias([
             'super.admin' => \App\Http\Middleware\SuperAdminMiddleware::class,
+            'org.admin' => \App\Http\Middleware\OrgAdminMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -14,19 +14,16 @@ class WorkspaceResource extends JsonResource
         $currentUserRole = null;
 
         if ($user) {
-            if ((int) $this->owner_id === (int) $user->id) {
-                $currentUserRole = 'owner';
-            } else {
-                $member = $this->workspaceMembers
-                    ? $this->workspaceMembers->firstWhere('user_id', $user->id)
-                    : null;
+            $member = $this->workspaceMembers
+                ? $this->workspaceMembers->firstWhere('user_id', $user->id)
+                : null;
 
-                $currentUserRole = $member?->role;
-            }
+            $currentUserRole = $member?->role;
         }
 
         $editRoles = \App\Models\WorkspaceMember::ROLES_CAN_EDIT;
         $manageRoles = \App\Models\WorkspaceMember::ROLES_CAN_MANAGE_MEMBERS;
+        $manageProjectRoles = \App\Models\WorkspaceMember::ROLES_CAN_MANAGE_PROJECT;
 
         return [
             'id' => $this->id,
@@ -44,6 +41,7 @@ class WorkspaceResource extends JsonResource
             'role' => $currentUserRole,
             'can_edit' => in_array($currentUserRole, $editRoles, true),
             'can_manage_members' => in_array($currentUserRole, $manageRoles, true),
+            'can_manage_project' => in_array($currentUserRole, $manageProjectRoles, true),
 
             'owner' => new UserResource($this->whenLoaded('owner')),
 

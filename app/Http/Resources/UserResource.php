@@ -36,6 +36,17 @@ class UserResource extends JsonResource
             'timezone' => $this->timezone,
             'preferences' => $this->preferences ?? [],
             'is_super_admin' => (bool) $this->is_super_admin,
+            'is_org_admin' => (bool) $this->is_org_admin,
+            'organization_id' => $this->organization_id,
+            'organization' => $this->when(
+                $this->relationLoaded('organization') && $this->organization,
+                fn () => [
+                    'id' => $this->organization->id,
+                    'name' => $this->organization->name,
+                    'subscription_ends_at' => $this->organization->subscription_ends_at?->format('Y-m-d H:i:s'),
+                    'is_expired' => $this->organization->isSubscriptionExpired(),
+                ]
+            ),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

@@ -14,6 +14,7 @@ class OrganizationResource extends JsonResource
             'name' => $this->name,
             'slug' => $this->slug,
             'owner_email' => $this->owner_email,
+            'owner_id' => $this->owner_id,
             'logo_path' => $this->logo_path,
             'logo_url' => $this->logo_path ? url('storage/' . $this->logo_path) : null,
             'primary_color' => $this->primary_color,
@@ -21,9 +22,15 @@ class OrganizationResource extends JsonResource
             'is_active' => $this->is_active,
             'onboarded_at' => $this->onboarded_at?->format('Y-m-d H:i:s'),
 
+            'subscription_starts_at' => $this->subscription_starts_at?->format('Y-m-d H:i:s'),
+            'subscription_ends_at' => $this->subscription_ends_at?->format('Y-m-d H:i:s'),
+            'is_expired' => $this->isSubscriptionExpired(),
+
             'subscription_plan' => new SubscriptionPlanResource(
                 $this->whenLoaded('subscriptionPlan')
             ),
+
+            'owner' => new UserResource($this->whenLoaded('owner')),
 
             'users_count' => $this->when(
                 isset($this->users_count),

@@ -83,6 +83,10 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if ($blocked = $this->organizationAccessBlocked($user)) {
+            return $blocked;
+        }
+
         if ($user->two_factor_enabled) {
             $temporaryToken = Str::random(80);
 
@@ -109,7 +113,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login successful!',
             'requires_2fa' => false,
-            'user' => new UserResource($user),
+            'user' => new UserResource($user->load('organization')),
         ]);
     }
 
@@ -159,14 +163,40 @@ class AuthController extends Controller
             ->where('user_id', $user->id)
             ->delete();
 
+        if ($blocked = $this->organizationAccessBlocked($user)) {
+            return $blocked;
+        }
+
         // 2FA passed — establish the first-party session.
         Auth::login($user);
         $request->session()->regenerate();
 
         return response()->json([
             'message' => 'Login successful!',
-            'user' => new UserResource($user),
+            'user' => new UserResource($user->load('organization')),
         ]);
+    }
+
+    /**
+     * Org members (admins + users) may only log in while their organization is
+     * active and its subscription has not expired. Super admins (no organization)
+     * are never blocked.
+     */
+    private function organizationAccessBlocked(User $user): ?\Illuminate\Http\JsonResponse
+    {
+        if (!$user->organization_id) {
+            return null;
+        }
+
+        $organization = $user->organization()->first();
+
+        if ($organization && !$organization->canMembersLogin()) {
+            return response()->json([
+                'message' => "Your organization's subscription has expired. Please contact your administrator.",
+            ], 403);
+        }
+
+        return null;
     }
 
     public function setupTwoFactor(Request $request)
@@ -584,7 +614,7 @@ class AuthController extends Controller
     {
         return response()->json([
             'message' => 'Profile fetched successfully.',
-            'user' => new UserResource($request->user()),
+            'user' => new UserResource($request->user()->load('organization')),
         ]);
     }
 

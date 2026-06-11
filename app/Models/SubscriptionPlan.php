@@ -15,6 +15,7 @@ class SubscriptionPlan extends Model
         'max_projects',
         'max_members',
         'storage_gb',
+        'duration_days',
         'features',
         'is_active',
     ];
@@ -22,6 +23,7 @@ class SubscriptionPlan extends Model
     protected $casts = [
         'features' => 'array',
         'is_active' => 'boolean',
+        'duration_days' => 'integer',
     ];
 
     public function organizations()

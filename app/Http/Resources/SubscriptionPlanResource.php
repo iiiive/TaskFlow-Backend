@@ -16,6 +16,7 @@ class SubscriptionPlanResource extends JsonResource
             'max_projects' => $this->max_projects,
             'max_members' => $this->max_members,
             'storage_gb' => $this->storage_gb,
+            'duration_days' => $this->duration_days,
             'features' => $this->features,
             'is_active' => $this->is_active,
             'organizations_count' => $this->when(

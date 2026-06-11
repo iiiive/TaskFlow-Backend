@@ -27,6 +27,7 @@ class AdminSubscriptionPlanController extends Controller
             'max_projects' => 'required|integer|min:1',
             'max_members' => 'required|integer|min:1',
             'storage_gb' => 'required|integer|min:1',
+            'duration_days' => 'nullable|integer|min:1',
             'features' => 'nullable|array',
             'is_active' => 'boolean',
         ]);
@@ -67,6 +68,7 @@ class AdminSubscriptionPlanController extends Controller
             'max_projects' => 'sometimes|required|integer|min:1',
             'max_members' => 'sometimes|required|integer|min:1',
             'storage_gb' => 'sometimes|required|integer|min:1',
+            'duration_days' => 'nullable|integer|min:1',
             'features' => 'nullable|array',
             'is_active' => 'boolean',
         ]);

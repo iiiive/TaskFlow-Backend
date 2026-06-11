@@ -16,6 +16,7 @@ class User extends Authenticatable
     protected $fillable = [
         'organization_id',
         'is_super_admin',
+        'is_org_admin',
         'name',
         'email',
         'password',
@@ -45,6 +46,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_super_admin' => 'boolean',
+            'is_org_admin' => 'boolean',
             'preferences' => 'array',
 
             // 2FA casts
@@ -57,6 +59,11 @@ class User extends Authenticatable
     public function organization()
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function isOrgAdmin(): bool
+    {
+        return (bool) $this->is_org_admin;
     }
 
     public function ownedWorkspaces()

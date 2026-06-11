@@ -18,9 +18,14 @@ use App\Http\Controllers\SprintController;
 use App\Http\Controllers\WorkflowController;
 use App\Http\Controllers\Admin\AdminOrganizationController;
 use App\Http\Controllers\Admin\AdminSubscriptionPlanController;
+use App\Http\Controllers\Org\OrgOverviewController;
+use App\Http\Controllers\Org\OrgUserController;
+use App\Http\Controllers\Org\OrgProjectController;
+use App\Http\Controllers\Org\OrgTeamController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Middleware\SuperAdminMiddleware;
+use App\Http\Middleware\OrgAdminMiddleware;
 
 /*
 |--------------------------------------------------------------------------
@@ -90,8 +95,35 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware(SuperAdminMiddleware::class)->prefix('admin')->group(function () {
             Route::get('organizations/{id}/billing', [AdminOrganizationController::class, 'billing']);
+            Route::post('organizations/{id}/renew', [AdminOrganizationController::class, 'renew']);
             Route::apiResource('organizations', AdminOrganizationController::class);
             Route::apiResource('subscription-plans', AdminSubscriptionPlanController::class);
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Organization Admin Routes (scoped to the admin's own organization)
+        |--------------------------------------------------------------------------
+        */
+
+        Route::middleware(OrgAdminMiddleware::class)->prefix('org')->group(function () {
+            Route::get('overview', [OrgOverviewController::class, 'index']);
+
+            Route::get('users', [OrgUserController::class, 'index']);
+            Route::post('users', [OrgUserController::class, 'store']);
+            Route::put('users/{id}', [OrgUserController::class, 'update']);
+            Route::delete('users/{id}', [OrgUserController::class, 'destroy']);
+
+            Route::get('projects', [OrgProjectController::class, 'index']);
+            Route::post('projects', [OrgProjectController::class, 'store']);
+            Route::delete('projects/{id}', [OrgProjectController::class, 'destroy']);
+            Route::post('projects/{id}/assign-team', [OrgProjectController::class, 'assignTeam']);
+            Route::post('projects/{id}/members', [OrgProjectController::class, 'addMember']);
+            Route::delete('projects/{id}/members/{userId}', [OrgProjectController::class, 'removeMember']);
+
+            Route::get('teams', [OrgTeamController::class, 'index']);
+            Route::post('teams', [OrgTeamController::class, 'store']);
+            Route::delete('teams/{id}', [OrgTeamController::class, 'destroy']);
         });
 
         /*

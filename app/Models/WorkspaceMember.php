@@ -12,8 +12,6 @@ class WorkspaceMember extends Model
     protected $table = 'project_members';
 
     const ROLES = [
-        'owner',
-        'admin',
         'project_manager',
         'team_lead',
         'developer',
@@ -22,9 +20,11 @@ class WorkspaceMember extends Model
         'client',
     ];
 
-    const ROLES_CAN_EDIT = ['owner', 'admin', 'project_manager', 'team_lead', 'developer'];
-    const ROLES_CAN_DELETE = ['owner', 'admin', 'project_manager'];
-    const ROLES_CAN_MANAGE_MEMBERS = ['owner', 'admin'];
+    // project_manager and team_lead have full project control.
+    const ROLES_CAN_EDIT = ['project_manager', 'team_lead', 'developer', 'tester'];
+    const ROLES_CAN_DELETE = ['project_manager', 'team_lead', 'developer', 'tester'];
+    const ROLES_CAN_MANAGE_MEMBERS = ['project_manager', 'team_lead'];
+    const ROLES_CAN_MANAGE_PROJECT = ['project_manager', 'team_lead'];
 
     protected $fillable = [
         'project_id',

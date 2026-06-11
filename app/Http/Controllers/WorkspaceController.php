@@ -99,8 +99,8 @@ class WorkspaceController extends Controller
             return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($project->owner_id, $user->id)) {
-            return response()->json(['message' => 'Only the project owner can update this project.'], 403);
+        if (!$this->permissionService->canManageWorkspace($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to update this project.'], 403);
         }
 
         $validated = $request->validate([
@@ -137,8 +137,8 @@ class WorkspaceController extends Controller
             return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($project->owner_id, $user->id)) {
-            return response()->json(['message' => 'Only the project owner can delete this project.'], 403);
+        if (!$this->permissionService->canManageWorkspace($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to delete this project.'], 403);
         }
 
         $this->workspaceService->deleteWorkspace($project, $user->id);
@@ -184,8 +184,8 @@ class WorkspaceController extends Controller
             return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($source->owner_id, $user->id)) {
-            return response()->json(['message' => 'Only the project owner can create a template from this project.'], 403);
+        if (!$this->permissionService->canManageWorkspace($source->id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to create a template from this project.'], 403);
         }
 
         $validated = $request->validate([
@@ -263,8 +263,8 @@ class WorkspaceController extends Controller
             return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($project->owner_id, $user->id)) {
-            return response()->json(['message' => 'Only the project owner can archive this project.'], 403);
+        if (!$this->permissionService->canManageWorkspace($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to archive this project.'], 403);
         }
 
         $project->update(['archived_at' => now()]);
@@ -281,8 +281,8 @@ class WorkspaceController extends Controller
             return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($project->owner_id, $user->id)) {
-            return response()->json(['message' => 'Only the project owner can unarchive this project.'], 403);
+        if (!$this->permissionService->canManageWorkspace($project->id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to unarchive this project.'], 403);
         }
 
         $project->update(['archived_at' => null]);
