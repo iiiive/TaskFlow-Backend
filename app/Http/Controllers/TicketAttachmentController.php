@@ -40,17 +40,6 @@ class TicketAttachmentController extends Controller
         $file = $request->file('file');
         $size = $file->getSize();
 
-        // Enforce the organization's storage budget when a plan limit is set.
-        $organization = $ticket->workspace?->organization;
-        if ($organization) {
-            $limit = $organization->storageLimitBytes();
-            if ($limit !== null && ($organization->storageUsedBytes() + $size) > $limit) {
-                return response()->json([
-                    'message' => 'Storage limit reached for your organization. Remove files or upgrade your plan.',
-                ], 422);
-            }
-        }
-
         $path = $file->store('ticket-attachments', 'public');
 
         $attachment = TicketAttachment::create([

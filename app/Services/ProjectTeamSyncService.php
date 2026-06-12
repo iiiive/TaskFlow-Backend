@@ -25,7 +25,7 @@ class ProjectTeamSyncService
 
         TeamMember::firstOrCreate(
             ['team_id' => $team->id, 'user_id' => $userId],
-            ['role' => 'member', 'joined_at' => now()]
+            ['role' => 'developer', 'joined_at' => now()]
         );
     }
 
@@ -46,7 +46,24 @@ class ProjectTeamSyncService
         foreach ($memberIds as $userId) {
             TeamMember::firstOrCreate(
                 ['team_id' => $team->id, 'user_id' => $userId],
-                ['role' => 'member', 'joined_at' => now()]
+                ['role' => 'developer', 'joined_at' => now()]
+            );
+        }
+    }
+
+    /**
+     * Push every team member into the project as a project member. Used when a
+     * team is assigned to a project so existing team members gain project access.
+     * Idempotent — won't overwrite a role that was already set.
+     */
+    public function backfillTeamToProject(\App\Models\Team $team, Workspace $workspace): void
+    {
+        $userIds = TeamMember::where('team_id', $team->id)->pluck('user_id');
+
+        foreach ($userIds as $userId) {
+            WorkspaceMember::firstOrCreate(
+                ['project_id' => $workspace->id, 'user_id' => $userId],
+                ['role' => 'developer']
             );
         }
     }

@@ -124,7 +124,9 @@ class WorkspaceService
         $team->update(['project_id' => $workspace->id]);
 
         $workspace->setRelation('team', $team);
+        // Sync both directions: project members → team, and team members → project.
         $this->teamSync->backfill($workspace);
+        $this->teamSync->backfillTeamToProject($team, $workspace);
     }
 
     public function updateWorkspace(Workspace $workspace, array $data, int $userId): Workspace

@@ -37,7 +37,6 @@ class OrgAdminWelcomeMail extends Mailable
                 'plan' => $plan,
                 'maxProjects' => $plan?->max_projects ?? '—',
                 'maxMembers' => $plan?->max_members ?? '—',
-                'storageGb' => $plan?->storage_gb ?? '—',
                 'expiresAt' => $this->organization->subscription_ends_at?->format('F j, Y'),
             ]);
     }

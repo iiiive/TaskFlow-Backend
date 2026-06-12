@@ -37,6 +37,17 @@ class WorkspaceController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::user();
+
+        // Project creation is reserved for organization administrators
+        // (org admins provision projects via the Org module). Workspace members
+        // — including project managers and team leads — cannot create projects.
+        if (!$user->is_org_admin && !$user->is_super_admin) {
+            return response()->json([
+                'message' => 'Only organization administrators can create projects.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -44,8 +55,6 @@ class WorkspaceController extends Controller
             'project_type' => 'nullable|in:software,it_support,marketing,hr,construction,general',
             'project_mode' => 'nullable|in:kanban,scrum',
         ]);
-
-        $user = Auth::user();
 
         if (empty($validated['project_key'])) {
             $validated['project_key'] = $this->generateProjectKey($validated['name']);
@@ -137,8 +146,13 @@ class WorkspaceController extends Controller
             return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canManageWorkspace($project->id, $user->id)) {
-            return response()->json(['message' => 'You do not have permission to delete this project.'], 403);
+        // Deleting an entire project is reserved for organization administrators.
+        // Workspace members (incl. project managers / team leads) cannot delete.
+        if (!$user->is_super_admin
+            && !($user->is_org_admin && $project->organization_id === $user->organization_id)) {
+            return response()->json([
+                'message' => 'Only organization administrators can delete projects.',
+            ], 403);
         }
 
         $this->workspaceService->deleteWorkspace($project, $user->id);
@@ -155,8 +169,8 @@ class WorkspaceController extends Controller
             return response()->json(['message' => 'Project not found.'], 404);
         }
 
-        if (!$this->permissionService->canView($source->id, $user->id)) {
-            return response()->json(['message' => 'You do not have access to this project.'], 403);
+        if (!$this->permissionService->canManageWorkspace($source->id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to clone this project.'], 403);
         }
 
         $validated = $request->validate([

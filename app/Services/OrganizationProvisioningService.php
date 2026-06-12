@@ -19,7 +19,10 @@ class OrganizationProvisioningService
      *
      * @param array{name: string, owner_email: string, owner_name: string, subscription_plan_id: int} $data
      */
-    public function provision(array $data): Organization
+    /**
+     * @return array{organization: Organization, temporary_password: string}
+     */
+    public function provision(array $data): array
     {
         return DB::transaction(function () use ($data) {
             $plan = SubscriptionPlan::findOrFail($data['subscription_plan_id']);
@@ -57,7 +60,7 @@ class OrganizationProvisioningService
                 new OrgAdminWelcomeMail($organization, $admin, $temporaryPassword)
             );
 
-            return $organization;
+            return ['organization' => $organization, 'temporary_password' => $temporaryPassword];
         });
     }
 

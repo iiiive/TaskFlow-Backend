@@ -32,7 +32,6 @@
             <h3>Your Plan: {{ $plan->name }}</h3>
             <div class="plan-item"><span>Max Projects</span><span><strong>{{ $maxProjects }}</strong></span></div>
             <div class="plan-item"><span>Max Members</span><span><strong>{{ $maxMembers }}</strong></span></div>
-            <div class="plan-item"><span>Storage</span><span><strong>{{ $storageGb }} GB</strong></span></div>
         </div>
         @endif
 

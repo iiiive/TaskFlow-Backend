@@ -14,7 +14,6 @@ class SubscriptionPlan extends Model
         'description',
         'max_projects',
         'max_members',
-        'storage_gb',
         'duration_days',
         'features',
         'is_active',

@@ -32,7 +32,6 @@ class OrganizationWelcomeMail extends Mailable
                 'loginUrl' => $loginUrl,
                 'maxProjects' => $plan?->max_projects ?? '—',
                 'maxMembers' => $plan?->max_members ?? '—',
-                'storageGb' => $plan?->storage_gb ?? '—',
             ]);
     }
 }

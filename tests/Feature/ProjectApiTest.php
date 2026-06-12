@@ -27,9 +27,9 @@ class ProjectApiTest extends TestCase
             ->assertJsonFragment(['name' => 'Alpha']);
     }
 
-    public function test_user_can_create_a_project(): void
+    public function test_org_admin_can_create_a_project(): void
     {
-        $this->actingAsUser();
+        $this->actingAsOrgAdmin();
 
         $this->postJson('/api/v1/projects', [
             'name'         => 'My Project',
@@ -43,9 +43,18 @@ class ProjectApiTest extends TestCase
         $this->assertDatabaseHas('projects', ['name' => 'My Project', 'project_type' => 'it_support']);
     }
 
+    public function test_workspace_member_cannot_create_a_project(): void
+    {
+        // Project creation is org-admin-only; regular members cannot create.
+        $this->actingAsUser();
+
+        $this->postJson('/api/v1/projects', ['name' => 'Sneaky Project'])
+            ->assertForbidden();
+    }
+
     public function test_create_project_validates_input(): void
     {
-        $this->actingAsUser();
+        $this->actingAsOrgAdmin();
 
         $this->postJson('/api/v1/projects', ['name' => ''])
             ->assertStatus(422)
@@ -54,7 +63,7 @@ class ProjectApiTest extends TestCase
 
     public function test_create_project_rejects_invalid_type(): void
     {
-        $this->actingAsUser();
+        $this->actingAsOrgAdmin();
 
         $this->postJson('/api/v1/projects', ['name' => 'X', 'project_type' => 'not_a_type'])
             ->assertStatus(422)
@@ -132,12 +141,22 @@ class ProjectApiTest extends TestCase
             ->assertJsonPath('data.name', 'From Tmpl');
     }
 
-    public function test_owner_can_delete_project(): void
+    public function test_org_admin_can_delete_project(): void
     {
-        $user = $this->actingAsUser();
-        $project = $this->makeProject($user);
+        $admin = $this->actingAsOrgAdmin();
+        $project = $this->makeProject($admin);
 
         $this->deleteJson("/api/v1/projects/{$project->id}")->assertOk();
         $this->assertDatabaseMissing('projects', ['id' => $project->id]);
+    }
+
+    public function test_project_manager_cannot_delete_project(): void
+    {
+        // Deleting a whole project is org-admin-only; even a project manager cannot.
+        $user = $this->actingAsUser();
+        $project = $this->makeProject($user); // creator is a project_manager
+
+        $this->deleteJson("/api/v1/projects/{$project->id}")->assertForbidden();
+        $this->assertDatabaseHas('projects', ['id' => $project->id]);
     }
 }

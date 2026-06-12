@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Mail;
 
 class TeamService
 {
-    public function createTeam(array $data, int $userId): Team
+    public function createTeam(array $data, int $userId, bool $addCreator = true): Team
     {
         $team = Team::create([
             'organization_id' => $data['organization_id'] ?? null,
@@ -25,17 +25,19 @@ class TeamService
             'capacity_hours'  => $data['capacity_hours'] ?? null,
         ]);
 
-        TeamMember::create([
-            'team_id'   => $team->id,
-            'user_id'   => $userId,
-            'role'      => 'team_lead',
-            'joined_at' => now(),
-        ]);
+        if ($addCreator) {
+            TeamMember::create([
+                'team_id'   => $team->id,
+                'user_id'   => $userId,
+                'role'      => 'project_manager',
+                'joined_at' => now(),
+            ]);
+        }
 
         return $team->load(['teamMembers.user', 'creator']);
     }
 
-    public function addMember(Team $team, int $userId, string $role = 'member', ?int $weeklyCapacityHours = null): TeamMember
+    public function addMember(Team $team, int $userId, string $role = 'developer', ?int $weeklyCapacityHours = null): TeamMember
     {
         $member = TeamMember::create([
             'team_id'   => $team->id,

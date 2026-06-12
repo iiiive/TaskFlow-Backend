@@ -24,6 +24,7 @@ use App\Http\Controllers\Org\OrgProjectController;
 use App\Http\Controllers\Org\OrgTeamController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\SearchController;
 use App\Http\Middleware\SuperAdminMiddleware;
 use App\Http\Middleware\OrgAdminMiddleware;
 
@@ -67,6 +68,10 @@ Route::prefix('v1')->group(function () {
     */
 
     Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
+
+        // Global, role-scoped search (organizations/plans/users for super admins;
+        // org-scoped users/projects/teams for org admins; member projects/tickets).
+        Route::get('/search', SearchController::class);
 
         Route::get('/profile', [AuthController::class, 'getProfile']);
         Route::put('/profile', [AuthController::class, 'updateProfile']);
@@ -123,6 +128,8 @@ Route::prefix('v1')->group(function () {
 
             Route::get('teams', [OrgTeamController::class, 'index']);
             Route::post('teams', [OrgTeamController::class, 'store']);
+            Route::post('teams/{id}/members', [OrgTeamController::class, 'addMember']);
+            Route::delete('teams/{id}/members/{userId}', [OrgTeamController::class, 'removeMember']);
             Route::delete('teams/{id}', [OrgTeamController::class, 'destroy']);
         });
 
@@ -204,6 +211,8 @@ Route::prefix('v1')->group(function () {
         Route::put('/tickets/{ticketId}', [TicketController::class, 'update']);
         Route::delete('/tickets/{ticketId}', [TicketController::class, 'destroy']);
         Route::get('/tickets/{ticketId}/insights', [TicketController::class, 'insights']);
+        // Scrum: pull a ticket into a sprint (lands in To Do) or send it back to the backlog.
+        Route::post('/tickets/{ticketId}/sprint', [TicketController::class, 'assignSprint']);
 
         /*
         |--------------------------------------------------------------------------

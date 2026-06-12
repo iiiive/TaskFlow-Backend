@@ -22,7 +22,7 @@ class AdminApiTest extends TestCase
         $this->makeSuperAdmin();
 
         $this->postJson('/api/v1/admin/subscription-plans', [
-            'name' => 'Pro', 'max_projects' => 20, 'max_members' => 100, 'storage_gb' => 50,
+            'name' => 'Pro', 'max_projects' => 20, 'max_members' => 100,
         ])->assertCreated();
 
         $this->getJson('/api/v1/admin/subscription-plans')
@@ -36,7 +36,7 @@ class AdminApiTest extends TestCase
         $plan = $this->makePlan();
 
         $this->postJson('/api/v1/admin/organizations', [
-            'name' => 'Acme', 'owner_email' => 'boss@acme.com', 'subscription_plan_id' => $plan->id,
+            'name' => 'Acme', 'owner_name' => 'Acme Boss', 'owner_email' => 'boss@acme.com', 'subscription_plan_id' => $plan->id,
         ])->assertCreated()->assertJsonPath('data.name', 'Acme');
     }
 
@@ -52,11 +52,11 @@ class AdminApiTest extends TestCase
     public function test_billing_endpoint_returns_usage(): void
     {
         $this->makeSuperAdmin();
-        $plan = $this->makePlan(['max_projects' => 5, 'max_members' => 10, 'storage_gb' => 5]);
+        $plan = $this->makePlan(['max_projects' => 5, 'max_members' => 10]);
         $org = $this->makeOrganization(['subscription_plan_id' => $plan->id]);
 
         $this->getJson("/api/v1/admin/organizations/{$org->id}/billing")
             ->assertOk()
-            ->assertJsonStructure(['data' => ['organization', 'plan', 'usage' => ['projects', 'members', 'storage']]]);
+            ->assertJsonStructure(['data' => ['organization', 'plan', 'usage' => ['projects', 'members']]]);
     }
 }

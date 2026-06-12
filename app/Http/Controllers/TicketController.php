@@ -6,6 +6,7 @@ use App\Http\Resources\TicketResource;
 use App\Models\ActivityLog;
 use App\Models\Epic;
 use App\Models\KanbanColumn;
+use App\Models\Sprint;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Models\Workspace;
@@ -59,6 +60,8 @@ class TicketController extends Controller
             'status' => 'nullable|in:' . implode(',', $this->allowedStatuses),
             'kanban_column_id' => 'nullable|integer|exists:kanban_columns,id',
             'epic_id' => 'nullable|integer|exists:epics,id',
+            'sprint_id' => 'nullable|integer|exists:sprints,id',
+            'backlog' => 'nullable|boolean',
             'issue_type' => 'nullable|in:' . implode(',', Ticket::ISSUE_TYPES),
             'priority' => 'nullable|in:low,medium,high,urgent',
             'assigned_to' => 'nullable|integer|exists:users,id',
@@ -79,6 +82,14 @@ class TicketController extends Controller
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
+        }
+
+        // Scrum: the backlog is everything not yet pulled into a sprint; the
+        // board is filtered to a single sprint (the active one).
+        if ($request->boolean('backlog')) {
+            $query->whereNull('sprint_id');
+        } elseif ($request->filled('sprint_id')) {
+            $query->where('sprint_id', $request->sprint_id);
         }
 
         if ($request->filled('kanban_column_id')) {
@@ -140,6 +151,69 @@ class TicketController extends Controller
             'message' => 'Tickets retrieved successfully.',
             'data' => TicketResource::collection($tickets),
         ], 200);
+    }
+
+    /**
+     * Assign a ticket to a sprint, or move it back to the backlog (sprint_id null).
+     * Assigning lands the ticket in the project's first ("To Do") column so it
+     * surfaces on the active-sprint board.
+     */
+    public function assignSprint(Request $request, $ticketId)
+    {
+        $user = Auth::user();
+
+        $ticket = Ticket::find($ticketId);
+
+        if (!$ticket) {
+            return response()->json(['message' => 'Ticket not found.'], 404);
+        }
+
+        if (!$this->permissionService->canCreateOrUpdateTicket($ticket->project_id, $user->id)) {
+            return response()->json(['message' => 'You do not have permission to update this ticket.'], 403);
+        }
+
+        $validated = $request->validate([
+            'sprint_id' => 'nullable|integer',
+        ]);
+
+        if (empty($validated['sprint_id'])) {
+            $ticket->update(['sprint_id' => null]);
+        } else {
+            $sprint = Sprint::where('id', $validated['sprint_id'])
+                ->where('project_id', $ticket->project_id)
+                ->first();
+
+            if (!$sprint) {
+                return response()->json(['message' => 'The selected sprint does not belong to this project.'], 422);
+            }
+
+            $todoColumn = KanbanColumn::where('project_id', $ticket->project_id)
+                ->orderBy('position')
+                ->first();
+
+            $ticket->update([
+                'sprint_id'        => $sprint->id,
+                'kanban_column_id' => $todoColumn?->id ?? $ticket->kanban_column_id,
+                'status'           => $todoColumn?->status_key ?: 'todo',
+            ]);
+        }
+
+        $ticket->load([
+            'creator:id,name,email',
+            'assignee:id,name,email',
+            'reporter:id,name,email',
+            'kanbanColumn',
+            'epic',
+            'sprint',
+            'labels',
+        ]);
+
+        return response()->json([
+            'message' => empty($validated['sprint_id'])
+                ? 'Ticket moved to the backlog.'
+                : 'Ticket added to sprint.',
+            'data' => new TicketResource($ticket),
+        ]);
     }
 
     public function store(Request $request, $projectId)

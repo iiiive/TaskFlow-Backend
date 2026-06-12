@@ -49,11 +49,12 @@ class AdminOrganizationController extends Controller
             'owner_email.unique' => 'A user with this email already exists.',
         ]);
 
-        $organization = $this->provisioning->provision($validated);
+        $result = $this->provisioning->provision($validated);
 
         return response()->json([
             'message' => 'Organization created. Admin account provisioned and credentials emailed.',
-            'data' => new OrganizationResource($organization),
+            'data' => new OrganizationResource($result['organization']),
+            'temporary_password' => $result['temporary_password'],
         ], 201);
     }
 
@@ -133,8 +134,6 @@ class AdminOrganizationController extends Controller
         }
 
         $plan = $organization->subscriptionPlan;
-        $storageLimit = $organization->storageLimitBytes();
-        $storageUsed = $organization->storageUsedBytes();
 
         return response()->json([
             'message' => 'Billing details retrieved successfully.',
@@ -149,12 +148,6 @@ class AdminOrganizationController extends Controller
                     'members' => [
                         'used'  => $organization->users_count,
                         'limit' => $plan?->max_members,
-                    ],
-                    'storage' => [
-                        'used_bytes'  => $storageUsed,
-                        'limit_bytes' => $storageLimit,
-                        'used_gb'     => round($storageUsed / 1073741824, 2),
-                        'limit_gb'    => $plan?->storage_gb,
                     ],
                 ],
             ],

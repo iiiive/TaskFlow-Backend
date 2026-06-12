@@ -35,6 +35,17 @@ trait CreatesPlanoraData
         return $this->actingAsUser(['is_super_admin' => true]);
     }
 
+    /** Create an organization admin and authenticate them via Sanctum. */
+    protected function actingAsOrgAdmin(array $overrides = []): User
+    {
+        $organization = $this->makeOrganization();
+
+        return $this->actingAsUser(array_merge([
+            'is_org_admin'    => true,
+            'organization_id' => $organization->id,
+        ], $overrides));
+    }
+
     protected function makeProject(User $owner, array $overrides = [], bool $withColumns = true): Workspace
     {
         $project = Workspace::create(array_merge([
@@ -46,10 +57,12 @@ trait CreatesPlanoraData
             'project_mode'    => 'kanban',
         ], $overrides));
 
+        // The project creator leads their own project (matches the self-serve
+        // flow in WorkspaceService::createWorkspace).
         WorkspaceMember::create([
             'project_id' => $project->id,
             'user_id'    => $owner->id,
-            'role'       => 'owner',
+            'role'       => 'project_manager',
         ]);
 
         if ($withColumns) {
@@ -91,7 +104,6 @@ trait CreatesPlanoraData
             'name'         => 'Test Plan',
             'max_projects' => 10,
             'max_members'  => 50,
-            'storage_gb'   => 5,
             'is_active'    => true,
         ], $overrides));
     }
